@@ -66,12 +66,12 @@ jobs:
 
       - name: Publish Core package to NPM
         working-directory: ./core
-        run: npm publish --access=public --registry https://wombat-dressing-room.appspot.com
+        run: npm publish --access=public --registry https://wombat-dressing-room.appspot.com/@google/adk/_ns
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.WOMBAT_CODE_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.WOMBAT_CORE_TOKEN }}
 
       - name: Publish Dev package to NPM
         working-directory: ./dev
-        run: npm publish --access=public --registry https://wombat-dressing-room.appspot.com
+        run: npm publish --access=public --registry https://wombat-dressing-room.appspot.com/@google/adk-devtools/_ns
         env:
           NODE_AUTH_TOKEN: ${{ secrets.WOMBAT_DEVTOOLS_TOKEN }}
