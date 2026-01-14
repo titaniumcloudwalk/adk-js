@@ -3,7 +3,7 @@
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
  */
-import {cloneDeep} from 'lodash';
+import cloneDeep from 'lodash-es/cloneDeep.js';
 
 import {State} from '../sessions/state.js';
 
