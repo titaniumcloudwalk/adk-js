@@ -22,6 +22,7 @@ import {PluginManager} from '../plugins/plugin_manager.js';
 import {BaseSessionService} from '../sessions/base_session_service.js';
 import {Session} from '../sessions/session.js';
 import {logger} from '../utils/logger.js';
+import {isGemini2OrAbove} from '../utils/model_name.js';
 
 interface RunnerInput {
   appName: string;
@@ -95,15 +96,14 @@ export class Runner {
 
       if (runConfig.supportCfc && this.agent instanceof LlmAgent) {
         const modelName = this.agent.canonicalModel.model;
-        if (!modelName.startsWith('gemini-2')) {
+        if (!isGemini2OrAbove(modelName)) {
           throw new Error(`CFC is not supported for model: ${
               modelName} in agent: ${this.agent.name}`);
         }
-      }
 
-      if (this.agent instanceof LlmAgent &&
-          !(this.agent.codeExecutor instanceof BuiltInCodeExecutor)) {
-        this.agent.codeExecutor = new BuiltInCodeExecutor();
+        if (!(this.agent.codeExecutor instanceof BuiltInCodeExecutor)) {
+          this.agent.codeExecutor = new BuiltInCodeExecutor();
+        }
       }
 
       const invocationContext = new InvocationContext({
