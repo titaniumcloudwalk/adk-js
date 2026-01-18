@@ -154,6 +154,37 @@ export interface LlmAgentConfig extends BaseAgentConfig {
   instruction?: string|InstructionProvider;
 
   /**
+   * Static instruction content sent literally as system instruction at the beginning.
+   *
+   * This field is for content that never changes and doesn't contain placeholders.
+   * It's sent directly to the model without any processing or variable substitution.
+   *
+   * This field is primarily for context caching optimization. Static instructions
+   * are sent as system instruction at the beginning of the request, allowing
+   * for improved performance when the static portion remains unchanged.
+   *
+   * **Impact on instruction field:**
+   * - When staticInstruction is undefined: instruction → systemInstruction
+   * - When staticInstruction is set: instruction → user content (after static content)
+   *
+   * **Context Caching:**
+   * Setting staticInstruction alone does NOT enable caching automatically.
+   * You need to configure context caching separately via the model's cache configuration.
+   *
+   * @example
+   * ```typescript
+   * const agent = new LlmAgent({
+   *   staticInstruction: {
+   *     role: 'user',
+   *     parts: [{text: 'You are a helpful assistant with extensive knowledge of programming.'}]
+   *   },
+   *   instruction: 'Help the user with their current question: {user_question}'
+   * });
+   * ```
+   */
+  staticInstruction?: Content;
+
+  /**
    * Instructions for all the agents in the entire agent tree.
    *
    * ONLY the globalInstruction in root agent will take effect.
@@ -362,10 +393,22 @@ class InstructionsLlmRequestProcessor extends BaseLlmRequestProcessor {
       appendInstructions(llmRequest, [instructionWithState]);
     }
 
-    // Step 2: Appends agent local instructions if set.
-    // TODO - b/425992518: requireStateInjection means user passed a
-    // instruction processor. We need to make it more explicit.
-    if (agent.instruction) {
+    // Step 1.5: Handle staticInstruction - add via appendInstructions
+    if (agent.staticInstruction) {
+      // Static instruction is sent literally without processing
+      // Convert Content to string for appendInstructions
+      const staticText = agent.staticInstruction.parts
+          .map(part => 'text' in part ? part.text : '')
+          .filter(Boolean)
+          .join('\n\n');
+      if (staticText) {
+        appendInstructions(llmRequest, [staticText]);
+      }
+    }
+
+    // Step 2: Handle instruction based on whether staticInstruction exists
+    if (agent.instruction && !agent.staticInstruction) {
+      // Only add to system instructions if no static instruction exists
       const {instruction, requireStateInjection} =
           await agent.canonicalInstruction(
               new ReadonlyContext(invocationContext),
@@ -378,6 +421,25 @@ class InstructionsLlmRequestProcessor extends BaseLlmRequestProcessor {
         );
       }
       appendInstructions(llmRequest, [instructionWithState]);
+    } else if (agent.instruction && agent.staticInstruction) {
+      // Static instruction exists, so add dynamic instruction to content
+      const {instruction, requireStateInjection} =
+          await agent.canonicalInstruction(
+              new ReadonlyContext(invocationContext),
+          );
+      let instructionWithState = instruction;
+      if (requireStateInjection) {
+        instructionWithState = await injectSessionState(
+            instruction,
+            new ReadonlyContext(invocationContext),
+        );
+      }
+      // Create user content for dynamic instruction
+      const dynamicContent: Content = {
+        role: 'user',
+        parts: [{text: instructionWithState}],
+      };
+      llmRequest.contents.push(dynamicContent);
     }
   }
 }
@@ -1203,6 +1265,7 @@ const CODE_EXECUTION_REQUEST_PROCESSOR = new CodeExecutionRequestProcessor();
 export class LlmAgent extends BaseAgent {
   model?: string|BaseLlm;
   instruction: string|InstructionProvider;
+  staticInstruction?: Content;
   globalInstruction: string|InstructionProvider;
   tools: ToolUnion[];
   generateContentConfig?: GenerateContentConfig;
@@ -1224,6 +1287,7 @@ export class LlmAgent extends BaseAgent {
     super(config);
     this.model = config.model;
     this.instruction = config.instruction ?? '';
+    this.staticInstruction = config.staticInstruction;
     this.globalInstruction = config.globalInstruction ?? '';
     this.tools = config.tools ?? [];
     this.generateContentConfig = config.generateContentConfig;
