@@ -454,3 +454,137 @@ export type {
   SequentialAgentConfigYaml,
   AgentConfigYaml,
 } from './agents/config/index.js';
+
+// Evaluation Framework
+export {
+  // Core types
+  EvalCase,
+  Invocation,
+  createInvocation,
+  createEvalCase,
+  createEvalCaseWithScenario,
+  getToolCalls,
+  getToolNames,
+  getTextFromContent,
+  // Eval set
+  EvalSet,
+  createEvalSet,
+  addEvalCaseToSet,
+  removeEvalCaseFromSet,
+  findEvalCase,
+  updateEvalCaseInSet,
+  // Metrics
+  EvalStatus,
+  ToolTrajectoryMatchType,
+  createEvalMetric,
+  createLlmAsJudgeCriterion,
+  createRubricsBasedCriterion,
+  createToolTrajectoryCriterion,
+  createHallucinationsCriterion,
+  // Rubrics
+  createRubric,
+  createRubricScore,
+  aggregateRubricScores,
+  // Results
+  createEvalCaseResult,
+  createEvalSetResult,
+  computeEvalSetSummary,
+  createPassedMetricResult,
+  createFailedMetricResult,
+  createNotEvaluatedMetricResult,
+  // Config
+  createEvalConfig,
+  validateEvalConfig,
+  getMetricNames,
+  findMetric,
+  // Evaluators
+  Evaluator,
+  createPassedResult,
+  createFailedResult,
+  createErrorResult,
+  computeAverageScore,
+  computeOverallStatus,
+  createPerInvocationResult,
+  TrajectoryEvaluator,
+  ResponseEvaluator,
+  LlmAsJudge,
+  parseScoreFromText,
+  RubricBasedEvaluator,
+  FinalResponseMatchV2Evaluator,
+  RubricBasedFinalResponseQualityV1Evaluator,
+  RubricBasedToolUseQualityV1Evaluator,
+  HallucinationsV1Evaluator,
+  SafetyEvaluatorV1,
+  SAFETY_CATEGORIES,
+  CustomMetricEvaluator,
+  createCustomEvaluator,
+  // Registry
+  MetricEvaluatorRegistry,
+  PrebuiltMetrics,
+  // Managers
+  EvalSetsManager,
+  EvalSetResultsManager,
+  InMemoryEvalSetsManager,
+  LocalEvalSetsManager,
+  LocalEvalSetResultsManager,
+  // Agent evaluator
+  AgentEvaluator,
+  createAgentEvaluator,
+  // User simulation
+  UserSimulator,
+  StaticUserSimulator,
+  LlmBackedUserSimulator,
+  createStaticUserSimulator,
+  // Constants
+  PREBUILT_METRIC_NAMES,
+  DEFAULT_NUM_SAMPLES,
+  DEFAULT_SIMILARITY_THRESHOLD,
+  DEFAULT_METRIC_THRESHOLD,
+  DEFAULT_JUDGE_MODEL,
+  RUBRIC_TYPES,
+} from './evaluation/index.js';
+export type {
+  // Core types
+  IntermediateData,
+  InvocationEvents,
+  SessionInput,
+  AppDetails,
+  ToolCall,
+  ToolResponse,
+  ConversationScenario,
+  StaticConversation,
+  // Metrics
+  EvalMetric,
+  BaseCriterion,
+  LlmAsAJudgeCriterion,
+  RubricsBasedCriterion,
+  HallucinationsCriterion,
+  ToolTrajectoryCriterion,
+  LlmBackedUserSimulatorCriterion,
+  Criterion,
+  JudgeModelOptions,
+  // Rubrics
+  Rubric,
+  RubricScore,
+  RubricContent,
+  // Results
+  EvalCaseResult,
+  EvalSetResult,
+  EvalMetricResult,
+  EvalMetricResultPerInvocation,
+  EvalSetResultSummary,
+  // Evaluators
+  EvaluationResult,
+  PerInvocationResult,
+  AutoRaterScore,
+  // Config
+  EvalConfig,
+  // Agent evaluator
+  AgentEvaluatorOptions,
+  EvalCaseRunResult,
+  // User simulation
+  UserSimulatorContext,
+  UserSimulatorResult,
+  // Custom evaluator
+  CustomEvalFunction,
+} from './evaluation/index.js';
