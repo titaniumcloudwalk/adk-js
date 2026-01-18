@@ -29,6 +29,8 @@ import {ToolContext} from '../tools/tool_context.js';
 import {base64Decode} from '../utils/env_aware_utils.js';
 import {logger} from '../utils/logger.js';
 
+import {BasePlanner} from '../planners/base_planner.js';
+import {BuiltInPlanner} from '../planners/built_in_planner.js';
 import {BaseAgent, BaseAgentConfig} from './base_agent.js';
 import {BaseLlmRequestProcessor, BaseLlmResponseProcessor} from './base_llm_processor.js';
 import {CallbackContext} from './callback_context.js';
@@ -287,6 +289,40 @@ export interface LlmAgentConfig extends BaseAgentConfig {
    * Instructs the agent to make a plan and execute it step by step.
    */
   codeExecutor?: BaseCodeExecutor;
+
+  /**
+   * The planner for the agent to generate plans for queries.
+   *
+   * A planner allows the agent to generate plans for queries to guide its
+   * actions. Two types of planners are available:
+   *
+   * - `BuiltInPlanner`: Uses the model's native thinking features via
+   *   `thinkingConfig`. Requires a model that supports thinking (e.g., Gemini 2.5).
+   *
+   * - `PlanReActPlanner`: Uses structured tags (PLANNING, REASONING, ACTION,
+   *   FINAL_ANSWER) to guide the model's response. Works with any model.
+   *
+   * **Important:** When using `BuiltInPlanner`, do not configure `thinkingConfig`
+   * in `generateContentConfig` - the planner's config takes precedence.
+   *
+   * @example
+   * ```typescript
+   * // Using BuiltInPlanner with native thinking
+   * const agent = new LlmAgent({
+   *   model: 'gemini-2.5-pro',
+   *   planner: new BuiltInPlanner({
+   *     thinkingConfig: { thinkingBudget: 8192 }
+   *   }),
+   * });
+   *
+   * // Using PlanReActPlanner for structured planning
+   * const agent = new LlmAgent({
+   *   model: 'gemini-2.5-flash',
+   *   planner: new PlanReActPlanner(),
+   * });
+   * ```
+   */
+  planner?: BasePlanner;
 }
 
 async function convertToolUnionToTools(
@@ -1255,6 +1291,117 @@ explore_df(${varName})
 
 const CODE_EXECUTION_REQUEST_PROCESSOR = new CodeExecutionRequestProcessor();
 
+/**
+ * NL Planning Request Processor.
+ *
+ * Handles planner configuration for LLM requests:
+ * - For BuiltInPlanner: Applies the thinkingConfig to the request
+ * - For PlanReActPlanner: Appends planning instructions to the request
+ */
+class NlPlanningRequestProcessor extends BaseLlmRequestProcessor {
+  override async *
+      runAsync(
+          invocationContext: InvocationContext,
+          llmRequest: LlmRequest,
+          ): AsyncGenerator<Event, void, void> {
+    const agent = invocationContext.agent;
+    if (!(agent instanceof LlmAgent)) {
+      return;
+    }
+
+    const planner = agent.planner;
+    if (!planner) {
+      return;
+    }
+
+    // For BuiltInPlanner, apply the thinkingConfig
+    if (planner instanceof BuiltInPlanner) {
+      planner.applyThinkingConfig(llmRequest);
+      return;
+    }
+
+    // For other planners, build and append the planning instruction
+    const planningInstruction = planner.buildPlanningInstruction(
+        new ReadonlyContext(invocationContext),
+        llmRequest,
+    );
+
+    if (planningInstruction) {
+      appendInstructions(llmRequest, [planningInstruction]);
+    }
+
+    // Remove thought flags from request contents to ensure clean processing
+    for (const content of llmRequest.contents) {
+      if (content.parts) {
+        for (const part of content.parts) {
+          if ('thought' in part) {
+            delete part.thought;
+          }
+        }
+      }
+    }
+  }
+}
+const NL_PLANNING_REQUEST_PROCESSOR = new NlPlanningRequestProcessor();
+
+/**
+ * NL Planning Response Processor.
+ *
+ * Processes the LLM response for planning:
+ * - For BuiltInPlanner: No processing needed (model's native thinking is already formatted)
+ * - For other planners: Calls processPlanningResponse to filter/transform response parts
+ */
+class NlPlanningResponseProcessor implements BaseLlmResponseProcessor {
+  async *
+      runAsync(invocationContext: InvocationContext, llmResponse: LlmResponse):
+          AsyncGenerator<Event, void, unknown> {
+    // Skip if the response is partial (streaming)
+    if (llmResponse.partial) {
+      return;
+    }
+
+    const agent = invocationContext.agent;
+    if (!(agent instanceof LlmAgent)) {
+      return;
+    }
+
+    const planner = agent.planner;
+    if (!planner) {
+      return;
+    }
+
+    // BuiltInPlanner doesn't need response processing
+    if (planner instanceof BuiltInPlanner) {
+      return;
+    }
+
+    // For other planners, process the response
+    const content = llmResponse.content;
+    if (!content?.parts || content.parts.length === 0) {
+      return;
+    }
+
+    const callbackContext = new CallbackContext({invocationContext});
+    const processedParts = planner.processPlanningResponse(
+        callbackContext,
+        content.parts,
+    );
+
+    // If the planner processed the parts, update the response
+    if (processedParts) {
+      llmResponse.content = {
+        ...content,
+        parts: processedParts,
+      };
+    }
+
+    // Note: State changes made during processPlanningResponse are automatically
+    // persisted through the CallbackContext's state object. No additional event
+    // yielding is needed here.
+  }
+}
+const NL_PLANNING_RESPONSE_PROCESSOR = new NlPlanningResponseProcessor();
+
 // --------------------------------------------------------------------------
 // #END RequesBaseCodeExecutort Processors
 // --------------------------------------------------------------------------
@@ -1282,6 +1429,7 @@ export class LlmAgent extends BaseAgent {
   requestProcessors: BaseLlmRequestProcessor[];
   responseProcessors: BaseLlmResponseProcessor[];
   codeExecutor?: BaseCodeExecutor;
+  planner?: BasePlanner;
 
   constructor(config: LlmAgentConfig) {
     super(config);
@@ -1302,6 +1450,7 @@ export class LlmAgent extends BaseAgent {
     this.beforeToolCallback = config.beforeToolCallback;
     this.afterToolCallback = config.afterToolCallback;
     this.codeExecutor = config.codeExecutor;
+    this.planner = config.planner;
 
     // TODO - b/425992518: Define these processor arrays.
     // Orders matter, don't change. Append new processors to the end
@@ -1309,11 +1458,14 @@ export class LlmAgent extends BaseAgent {
       BASIC_LLM_REQUEST_PROCESSOR,
       IDENTITY_LLM_REQUEST_PROCESSOR,
       INSTRUCTIONS_LLM_REQUEST_PROCESSOR,
+      NL_PLANNING_REQUEST_PROCESSOR,
       REQUEST_CONFIRMATION_LLM_REQUEST_PROCESSOR,
       CONTENT_REQUEST_PROCESSOR,
       CODE_EXECUTION_REQUEST_PROCESSOR,
     ];
-    this.responseProcessors = config.responseProcessors ?? [];
+    this.responseProcessors = config.responseProcessors ?? [
+      NL_PLANNING_RESPONSE_PROCESSOR,
+    ];
 
     // Preserve the agent transfer behavior.
     const agentTransferDisabled = this.disallowTransferToParent &&
@@ -1364,6 +1516,17 @@ export class LlmAgent extends BaseAgent {
                 this.name}: if outputSchema is set, tools must be empty`,
         );
       }
+    }
+
+    // Validate planner and thinkingConfig conflict.
+    // If both are configured, warn that planner's thinkingConfig takes precedence.
+    if (this.planner instanceof BuiltInPlanner &&
+        config.generateContentConfig?.thinkingConfig) {
+      logger.warn(
+          `Both generateContentConfig.thinkingConfig and planner.thinkingConfig ` +
+          `are configured for agent ${this.name}. The planner's thinkingConfig ` +
+          `will take precedence.`,
+      );
     }
   }
 
