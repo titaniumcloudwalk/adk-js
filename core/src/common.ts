@@ -136,6 +136,8 @@ export {GLOBAL_SCOPE_KEY, REFLECT_AND_RETRY_RESPONSE_TYPE, ReflectAndRetryToolPl
 export type {ReflectAndRetryToolPluginOptions, ToolFailureResponse} from './plugins/reflect_retry_tool_plugin.js';
 export {SaveFilesAsArtifactsPlugin} from './plugins/save_files_as_artifacts_plugin.js';
 export type {SaveFilesAsArtifactsPluginOptions} from './plugins/save_files_as_artifacts_plugin.js';
+export {DebugLoggingPlugin} from './plugins/debug_logging_plugin.js';
+export type {DebugLoggingPluginOptions, DebugEntry, InvocationDebugState} from './plugins/debug_logging_plugin.js';
 export {BasePlanner} from './planners/base_planner.js';
 export {BuiltInPlanner} from './planners/built_in_planner.js';
 export {PlanReActPlanner, PLANNING_TAG, REPLANNING_TAG, REASONING_TAG, ACTION_TAG, FINAL_ANSWER_TAG} from './planners/plan_re_act_planner.js';
