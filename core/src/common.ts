@@ -45,6 +45,18 @@ export type {Event} from './events/event.js';
 export type {EventActions} from './events/event_actions.js';
 export {createEventActions} from './events/event_actions.js';
 export {InMemoryMemoryService} from './memory/in_memory_memory_service.js';
+export {
+  AnthropicLlm,
+  Claude,
+  contentBlockToPart,
+  contentToMessageParam,
+  functionDeclarationToToolParam,
+  messageToLlmResponse,
+  partToMessageBlock,
+  toClaudeRole,
+  toGoogleGenaiFinishReason,
+} from './models/anthropic_llm.js';
+export type {AnthropicLlmParams, ClaudeParams} from './models/anthropic_llm.js';
 export {BaseLlm, isBaseLlm} from './models/base_llm.js';
 export type {BaseLlmConnection} from './models/base_llm_connection.js';
 export type {CacheMetadata, ContextCacheConfig} from './models/cache_metadata.js';

@@ -6,6 +6,7 @@
 
 import {logger} from '../utils/logger.js';
 
+import {AnthropicLlm, Claude} from './anthropic_llm.js';
 import {BaseLlm} from './base_llm.js';
 import {Gemini} from './google_llm.js';
 
@@ -126,3 +127,15 @@ export class LLMRegistry {
 
 /** Registers default LLM factories, e.g. for Gemini models. */
 LLMRegistry.register(Gemini);
+
+/**
+ * Registers Anthropic LLM factories for Claude models.
+ *
+ * Note: AnthropicLlm is for direct Anthropic API access.
+ * Claude is for Vertex AI-hosted Claude models.
+ *
+ * Registration order matters - Claude patterns (with @) are more specific,
+ * so register them first to ensure proper matching.
+ */
+LLMRegistry.register(Claude);
+LLMRegistry.register(AnthropicLlm);
