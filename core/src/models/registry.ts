@@ -9,6 +9,7 @@ import {logger} from '../utils/logger.js';
 import {AnthropicLlm, Claude} from './anthropic_llm.js';
 import {BaseLlm} from './base_llm.js';
 import {Gemini} from './google_llm.js';
+import {LiteLlm} from './lite_llm.js';
 
 /**
  * type[BaseLlm] equivalent in TypeScript, represents a class that can be new-ed
@@ -139,3 +140,12 @@ LLMRegistry.register(Gemini);
  */
 LLMRegistry.register(Claude);
 LLMRegistry.register(AnthropicLlm);
+
+/**
+ * Registers LiteLLM factory for model-agnostic support.
+ *
+ * LiteLLM supports 100+ LLM providers including OpenAI, Azure, Groq,
+ * Anthropic (via LiteLLM), Mistral, Cohere, and many more.
+ * See https://docs.litellm.ai/docs/providers for full provider list.
+ */
+LLMRegistry.register(LiteLlm);

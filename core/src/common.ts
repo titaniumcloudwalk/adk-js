@@ -58,6 +58,13 @@ export {
 } from './models/anthropic_llm.js';
 export type {AnthropicLlmParams, ClaudeParams} from './models/anthropic_llm.js';
 export {BaseLlm, isBaseLlm} from './models/base_llm.js';
+export {
+  LiteLlm,
+  contentToMessageParam as liteLlmContentToMessageParam,
+  functionDeclarationToToolParam as liteLlmFunctionDeclarationToToolParam,
+  getProviderFromModel,
+} from './models/lite_llm.js';
+export type {LiteLlmParams} from './models/lite_llm.js';
 export type {BaseLlmConnection} from './models/base_llm_connection.js';
 export type {CacheMetadata, ContextCacheConfig} from './models/cache_metadata.js';
 export {createContextCacheConfig} from './models/cache_metadata.js';
