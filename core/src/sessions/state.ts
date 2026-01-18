@@ -59,6 +59,34 @@ export class State {
   }
 
   /**
+   * Gets the value of a key, or sets it to a default if the key doesn't exist.
+   *
+   * This method is similar to Python's dict.setdefault() method. It provides
+   * atomic get-or-set behavior for state values.
+   *
+   * @param key The key to get or set the value for.
+   * @param defaultValue The default value to set and return if the key doesn't exist.
+   * @return The existing value if the key exists, or the default value after setting it.
+   *
+   * @example
+   * ```typescript
+   * const state = new State();
+   * // Key doesn't exist, so set and return default
+   * const value1 = state.setDefault('counter', 0); // Returns 0
+   * // Key now exists, so return existing value
+   * const value2 = state.setDefault('counter', 5); // Returns 0, not 5
+   * ```
+   */
+  setDefault<T>(key: string, defaultValue?: T): T|undefined {
+    if (this.has(key)) {
+      return this.get(key) as T;
+    } else {
+      this.set(key, defaultValue);
+      return defaultValue;
+    }
+  }
+
+  /**
    * Whether the state has pending delta.
    */
   hasDelta(): boolean {

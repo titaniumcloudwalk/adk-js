@@ -398,7 +398,7 @@ class InstructionsLlmRequestProcessor extends BaseLlmRequestProcessor {
       // Static instruction is sent literally without processing
       // Convert Content to string for appendInstructions
       const staticText = agent.staticInstruction.parts
-          .map(part => 'text' in part ? part.text : '')
+          ?.map(part => 'text' in part ? part.text : '')
           .filter(Boolean)
           .join('\n\n');
       if (staticText) {
