@@ -276,6 +276,47 @@ export type {
   TableSchema,
 } from './tools/bigquery/index.js';
 
+// Spanner tools
+export {
+  Capabilities as SpannerCapabilities,
+  DEFAULT_SPANNER_ADMIN_SCOPE,
+  DEFAULT_SPANNER_DATA_SCOPE,
+  DEFAULT_SPANNER_SCOPES,
+  getSpannerScopes,
+  getSpannerUserAgent,
+  QueryResultMode as SpannerQueryResultMode,
+  SPANNER_TOKEN_CACHE_KEY,
+  SpannerToolset,
+  validateSpannerToolSettings,
+} from './tools/spanner/index.js';
+export type {
+  ColumnMetadata as SpannerColumnMetadata,
+  ColumnSchemaInfo,
+  DistanceType,
+  EmbeddingOptions,
+  IndexColumnInfo,
+  IndexInfo,
+  KeyColumnInfo,
+  NamedSchemaInfo,
+  NearestNeighborsAlgorithm,
+  QueryExecutionResult as SpannerQueryExecutionResult,
+  QueryOptions as SpannerQueryOptions,
+  QueryResult as SpannerQueryResult,
+  SearchOptions,
+  SimilaritySearchResult,
+  SpannerClient,
+  SpannerClientFactory,
+  SpannerCredentialsConfig,
+  SpannerToolResult,
+  SpannerToolSettings,
+  SpannerToolsetOptions,
+  SpannerVectorStoreSettings,
+  TableColumn,
+  TableMetadataInfo,
+  TableSchemaInfo,
+  VectorSearchIndexSettings,
+} from './tools/spanner/index.js';
+
 export * from './artifacts/base_artifact_service.js';
 export * from './memory/base_memory_service.js';
 export * from './memory/memory_entry.js';
