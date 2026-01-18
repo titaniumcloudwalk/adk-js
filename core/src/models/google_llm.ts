@@ -14,6 +14,7 @@ import {version} from '../version.js';
 import {BaseLlm} from './base_llm.js';
 import {BaseLlmConnection} from './base_llm_connection.js';
 import {GeminiLlmConnection} from './gemini_llm_connection.js';
+import {generateContentViaInteractions} from './interactions_utils.js';
 import {LlmRequest} from './llm_request.js';
 import {createLlmResponse, LlmResponse} from './llm_response.js';
 
@@ -50,6 +51,18 @@ export interface GeminiParams {
    * Headers to merge with internally crafted headers.
    */
   headers?: Record<string, string>;
+  /**
+   * Whether to use the Interactions API for stateful conversations.
+   *
+   * When enabled, the Gemini model will use the Interactions API which
+   * provides stateful conversation capabilities. Conversations can be
+   * chained using `previousInteractionId` instead of sending full
+   * conversation history with each request.
+   *
+   * Note: Context caching is not used with the Interactions API since it
+   * maintains conversation state via interaction chaining.
+   */
+  useInteractionsApi?: boolean;
 }
 
 /**
@@ -61,6 +74,7 @@ export class Gemini extends BaseLlm {
   private readonly project?: string;
   private readonly location?: string;
   private readonly headers?: Record<string, string>;
+  private readonly useInteractionsApi: boolean;
 
   /**
    * @param params The parameters for creating a Gemini instance.
@@ -72,6 +86,7 @@ export class Gemini extends BaseLlm {
     project,
     location,
     headers,
+    useInteractionsApi,
   }: GeminiParams) {
     if (!model) {
       model = 'gemini-2.5-flash';
@@ -83,6 +98,7 @@ export class Gemini extends BaseLlm {
     this.location = location;
     this.apiKey = apiKey;
     this.headers = headers;
+    this.useInteractionsApi = useInteractionsApi || false;
 
     const canReadEnv = typeof process === 'object';
 
@@ -155,6 +171,20 @@ export class Gemini extends BaseLlm {
           ): AsyncGenerator<LlmResponse, void> {
     this.preprocessRequest(llmRequest);
     this.maybeAppendUserContent(llmRequest);
+
+    // Use Interactions API if enabled
+    if (this.useInteractionsApi) {
+      logger.info(
+          `Sending out request via Interactions API, model: ${llmRequest.model}, backend: ${
+              this.apiBackend}, stream: ${stream}`,
+      );
+      for await (const llmResponse of generateContentViaInteractions(
+          this.apiClient, llmRequest, stream)) {
+        yield llmResponse;
+      }
+      return;
+    }
+
     logger.info(
         `Sending out request, model: ${llmRequest.model}, backend: ${
             this.apiBackend}, stream: ${stream}`,

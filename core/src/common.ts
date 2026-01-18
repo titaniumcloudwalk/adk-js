@@ -52,6 +52,33 @@ export {createContextCacheConfig} from './models/cache_metadata.js';
 export {GeminiContextCacheManager} from './models/gemini_context_cache_manager.js';
 export {Gemini} from './models/google_llm.js';
 export type {GeminiParams} from './models/google_llm.js';
+export {
+  buildGenerationConfig,
+  buildInteractionsEventLog,
+  buildInteractionsRequestLog,
+  buildInteractionsResponseLog,
+  convertContentToTurn,
+  convertContentsToTurns,
+  convertInteractionEventToLlmResponse,
+  convertInteractionOutputToPart,
+  convertInteractionToLlmResponse,
+  convertPartToInteractionContent,
+  convertToolsConfigToInteractionsFormat,
+  extractSystemInstruction,
+  generateContentViaInteractions,
+  getLatestUserContents,
+} from './models/interactions_utils.js';
+export type {
+  Interaction,
+  InteractionContent,
+  InteractionDelta,
+  InteractionError,
+  InteractionOutput,
+  InteractionSSEEvent,
+  InteractionUsage,
+  ToolParam,
+  TurnParam,
+} from './models/interactions_utils.js';
 export type {LlmRequest} from './models/llm_request.js';
 export type {LlmResponse} from './models/llm_response.js';
 export {LLMRegistry} from './models/registry.js';
