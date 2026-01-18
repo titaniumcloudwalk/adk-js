@@ -19,6 +19,7 @@ import {randomUUID} from '../utils/env_aware_utils.js';
 import {ActiveStreamingTool} from './active_streaming_tool.js';
 import {BaseAgent} from './base_agent.js';
 import {LiveRequestQueue} from './live_request_queue.js';
+import {RealtimeCacheEntry} from './realtime_cache_entry.js';
 import {RunConfig} from './run_config.js';
 import {TranscriptionEntry} from './transcription_entry.js';
 
@@ -34,6 +35,8 @@ interface InvocationContextParams {
   session: Session;
   endInvocation?: boolean;
   transcriptionCache?: TranscriptionEntry[];
+  inputRealtimeCache?: RealtimeCacheEntry[];
+  outputRealtimeCache?: RealtimeCacheEntry[];
   runConfig?: RunConfig;
   liveRequestQueue?: LiveRequestQueue;
   activeStreamingTools?: Record<string, ActiveStreamingTool>;
@@ -158,6 +161,18 @@ export class InvocationContext {
   transcriptionCache?: TranscriptionEntry[];
 
   /**
+   * Cache for input (user) realtime audio/video data.
+   * Used by AudioCacheManager to accumulate audio chunks before flushing.
+   */
+  inputRealtimeCache?: RealtimeCacheEntry[];
+
+  /**
+   * Cache for output (model) realtime audio/video data.
+   * Used by AudioCacheManager to accumulate audio chunks before flushing.
+   */
+  outputRealtimeCache?: RealtimeCacheEntry[];
+
+  /**
    * Configurations for live agents under this invocation.
    */
   runConfig?: RunConfig;
@@ -217,6 +232,8 @@ export class InvocationContext {
     this.session = params.session;
     this.endInvocation = params.endInvocation || false;
     this.transcriptionCache = params.transcriptionCache;
+    this.inputRealtimeCache = params.inputRealtimeCache;
+    this.outputRealtimeCache = params.outputRealtimeCache;
     this.runConfig = params.runConfig;
     this.liveRequestQueue = params.liveRequestQueue;
     this.activeStreamingTools = params.activeStreamingTools;

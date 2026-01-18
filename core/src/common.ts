@@ -32,6 +32,13 @@ export {
 export {InvocationContext} from './agents/invocation_context.js';
 export {LiveRequestQueue} from './agents/live_request_queue.js';
 export type {LiveRequest} from './agents/live_request_queue.js';
+export type {RealtimeCacheEntry} from './agents/realtime_cache_entry.js';
+export type {TranscriptionEntry} from './agents/transcription_entry.js';
+export {TranscriptionManager} from './agents/transcription_manager.js';
+export {AudioCacheManager} from './agents/audio_cache_manager.js';
+export type {AudioCacheConfig} from './agents/audio_cache_manager.js';
+export {AudioTranscriber, NoOpSpeechClient} from './agents/audio_transcriber.js';
+export type {SpeechClient, SpeechRecognitionConfig} from './agents/audio_transcriber.js';
 export {LlmAgent} from './agents/llm_agent.js';
 export type {AfterModelCallback, AfterToolCallback, BeforeModelCallback, BeforeToolCallback, OnModelErrorCallback, OnToolErrorCallback, SingleAfterModelCallback, SingleAfterToolCallback, SingleBeforeModelCallback, SingleBeforeToolCallback, SingleOnModelErrorCallback, SingleOnToolErrorCallback} from './agents/llm_agent.js';
 export {LoopAgent} from './agents/loop_agent.js';
