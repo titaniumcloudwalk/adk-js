@@ -158,6 +158,11 @@ export {GOOGLE_SEARCH} from './tools/google_search_tool.js';
 export {LongRunningFunctionTool} from './tools/long_running_tool.js';
 export {ToolConfirmation} from './tools/tool_confirmation.js';
 export {ToolContext} from './tools/tool_context.js';
+export {
+  VertexAiSearchTool,
+  createVertexAiSearchTool,
+} from './tools/vertex_ai_search_tool.js';
+export type {VertexAiSearchToolConfig} from './tools/vertex_ai_search_tool.js';
 export {LogLevel, setLogLevel} from './utils/logger.js';
 export {isGemini2OrAbove} from './utils/model_name.js';
 export {zodObjectToSchema} from './utils/simple_zod_to_json.js';
