@@ -386,6 +386,22 @@ export type {
   RunnerFactory,
 } from './a2a/index.js';
 
+// Application Integration Tools
+export {
+  ApplicationIntegrationToolset,
+  IntegrationConnectorTool,
+  ConnectionsClient,
+  IntegrationClient,
+} from './tools/application_integration_tool/index.js';
+export type {
+  ApplicationIntegrationToolsetOptions,
+  IntegrationConnectorToolOptions,
+  ConnectionsClientOptions,
+  ConnectionDetails,
+  ActionSchema,
+  IntegrationClientOptions,
+} from './tools/application_integration_tool/index.js';
+
 // Agent Config (YAML-based configuration)
 export {
   // Config loading utilities
