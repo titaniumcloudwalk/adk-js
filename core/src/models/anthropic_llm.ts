@@ -554,7 +554,6 @@ export class AnthropicLlm extends BaseLlm {
     try {
       // Dynamic import of Anthropic SDK
       // The SDK is an optional peer dependency, so we use dynamic import
-      // @ts-expect-error - @anthropic-ai/sdk is an optional peer dependency
       const anthropicModule = await import('@anthropic-ai/sdk');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const Anthropic = (anthropicModule as any).default || (anthropicModule as any).Anthropic;
@@ -758,7 +757,6 @@ export class Claude extends AnthropicLlm {
     try {
       // Dynamic import of Anthropic SDK
       // The SDK is an optional peer dependency, so we use dynamic import
-      // @ts-expect-error - @anthropic-ai/sdk is an optional peer dependency
       const anthropicModule = await import('@anthropic-ai/sdk');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const am = anthropicModule as any;

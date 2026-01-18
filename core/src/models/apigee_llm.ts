@@ -9,31 +9,11 @@ import {GoogleGenAI} from '@google/genai';
 import {logger} from '../utils/logger.js';
 import {version} from '../version.js';
 
-import {Gemini, type GeminiParams} from './google_llm.js';
+import {Gemini, type GeminiParams, type HttpRetryOptions} from './google_llm.js';
 import type {LlmRequest} from './llm_request.js';
 
-/**
- * HTTP retry options for handling transient failures.
- * Matches the google.genai.types.HttpRetryOptions interface.
- */
-export interface HttpRetryOptions {
-  /**
-   * Initial delay before first retry in milliseconds.
-   */
-  initialDelay?: number;
-  /**
-   * Maximum number of retry attempts.
-   */
-  attempts?: number;
-  /**
-   * Maximum delay between retries in milliseconds.
-   */
-  maxDelay?: number;
-  /**
-   * Multiplier for exponential backoff.
-   */
-  backoffMultiplier?: number;
-}
+// Re-export HttpRetryOptions for backwards compatibility
+export type {HttpRetryOptions} from './google_llm.js';
 
 const APIGEE_PROXY_URL_ENV_VARIABLE_NAME = 'APIGEE_PROXY_URL';
 const GOOGLE_GENAI_USE_VERTEXAI_ENV_VARIABLE_NAME = 'GOOGLE_GENAI_USE_VERTEXAI';
@@ -126,7 +106,6 @@ export class ApigeeLlm extends Gemini {
 
   private readonly proxyUrl?: string;
   private readonly customHeaders: Record<string, string>;
-  private readonly retryOptions?: HttpRetryOptions;
   private readonly isVertexai: boolean;
   private readonly apiVersion?: string;
   private readonly _project?: string;
@@ -198,6 +177,7 @@ export class ApigeeLlm extends Gemini {
       location: isVertexai ? resolvedLocation : undefined,
       headers,
       useInteractionsApi,
+      retryOptions,
       // Provide a dummy API key when not using Vertex AI
       // The actual authentication is handled by Apigee proxy
       apiKey: isVertexai ? undefined : 'apigee-proxy-handled',
@@ -208,7 +188,6 @@ export class ApigeeLlm extends Gemini {
     this._location = resolvedLocation;
     this.apiVersion = identifyApiVersion(model);
     this.customHeaders = customHeaders || {};
-    this.retryOptions = retryOptions;
     this.userAgent = `google-adk/${version}`;
 
     // Get proxy URL from parameter or environment

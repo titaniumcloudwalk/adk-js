@@ -18,6 +18,44 @@ import {generateContentViaInteractions} from './interactions_utils.js';
 import {LlmRequest} from './llm_request.js';
 import {createLlmResponse, LlmResponse} from './llm_response.js';
 
+/**
+ * HTTP retry options for handling transient failures.
+ *
+ * When configured, the GoogleGenAI client will automatically retry failed
+ * requests using exponential backoff. This is useful for handling transient
+ * network issues, rate limiting (HTTP 429), and temporary server errors.
+ *
+ * @example
+ * ```typescript
+ * const gemini = new Gemini({
+ *   model: 'gemini-2.5-flash',
+ *   retryOptions: {
+ *     initialDelay: 1000,  // 1 second
+ *     attempts: 3,
+ *     backoffMultiplier: 2,
+ *   },
+ * });
+ * ```
+ */
+export interface HttpRetryOptions {
+  /**
+   * Initial delay before first retry in milliseconds.
+   */
+  initialDelay?: number;
+  /**
+   * Maximum number of retry attempts.
+   */
+  attempts?: number;
+  /**
+   * Maximum delay between retries in milliseconds.
+   */
+  maxDelay?: number;
+  /**
+   * Multiplier for exponential backoff.
+   */
+  backoffMultiplier?: number;
+}
+
 const AGENT_ENGINE_TELEMETRY_TAG = 'remote_reasoning_engine';
 const AGENT_ENGINE_TELEMETRY_ENV_VARIABLE_NAME = 'GOOGLE_CLOUD_AGENT_ENGINE_ID';
 
@@ -63,6 +101,26 @@ export interface GeminiParams {
    * maintains conversation state via interaction chaining.
    */
   useInteractionsApi?: boolean;
+  /**
+   * HTTP retry configuration for handling transient failures.
+   *
+   * When configured, the GoogleGenAI client will automatically retry failed
+   * requests using exponential backoff. This is useful for handling transient
+   * network issues, rate limiting (HTTP 429), and temporary server errors.
+   *
+   * @example
+   * ```typescript
+   * const gemini = new Gemini({
+   *   model: 'gemini-2.5-flash',
+   *   retryOptions: {
+   *     initialDelay: 1000,  // 1 second
+   *     attempts: 3,
+   *     backoffMultiplier: 2,
+   *   },
+   * });
+   * ```
+   */
+  retryOptions?: HttpRetryOptions;
 }
 
 /**
@@ -75,6 +133,7 @@ export class Gemini extends BaseLlm {
   private readonly location?: string;
   private readonly headers?: Record<string, string>;
   private readonly useInteractionsApi: boolean;
+  protected readonly retryOptions?: HttpRetryOptions;
 
   /**
    * @param params The parameters for creating a Gemini instance.
@@ -87,6 +146,7 @@ export class Gemini extends BaseLlm {
     location,
     headers,
     useInteractionsApi,
+    retryOptions,
   }: GeminiParams) {
     if (!model) {
       model = 'gemini-2.5-flash';
@@ -99,6 +159,7 @@ export class Gemini extends BaseLlm {
     this.apiKey = apiKey;
     this.headers = headers;
     this.useInteractionsApi = useInteractionsApi || false;
+    this.retryOptions = retryOptions;
 
     const canReadEnv = typeof process === 'object';
 
@@ -281,18 +342,28 @@ export class Gemini extends BaseLlm {
       ...this.headers,
     }
 
+    // Build httpOptions with optional retry configuration
+    const httpOptions: {
+      headers?: Record<string, string>;
+      retryOptions?: HttpRetryOptions;
+    } = {headers: combinedHeaders};
+
+    if (this.retryOptions) {
+      httpOptions.retryOptions = this.retryOptions;
+    }
+
     if (this.vertexai) {
       this._apiClient = new GoogleGenAI({
         vertexai: this.vertexai,
         project: this.project,
         location: this.location,
-        httpOptions: {headers: combinedHeaders},
+        httpOptions,
       });
     }
     else {
       this._apiClient = new GoogleGenAI({
         apiKey: this.apiKey,
-        httpOptions: {headers: combinedHeaders},
+        httpOptions,
       });
     }
     return this._apiClient;
@@ -317,12 +388,23 @@ export class Gemini extends BaseLlm {
 
   get liveApiClient(): GoogleGenAI {
     if (!this._liveApiClient) {
+      // Build httpOptions with optional retry configuration
+      const httpOptions: {
+        headers?: Record<string, string>;
+        apiVersion?: string;
+        retryOptions?: HttpRetryOptions;
+      } = {
+        headers: this.trackingHeaders,
+        apiVersion: this.liveApiVersion,
+      };
+
+      if (this.retryOptions) {
+        httpOptions.retryOptions = this.retryOptions;
+      }
+
       this._liveApiClient = new GoogleGenAI({
         apiKey: this.apiKey,
-        httpOptions: {
-          headers: this.trackingHeaders,
-          apiVersion: this.liveApiVersion,
-        },
+        httpOptions,
       });
     }
     return this._liveApiClient;
