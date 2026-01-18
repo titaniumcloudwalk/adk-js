@@ -6,6 +6,11 @@
 
 export {BaseAgent, isBaseAgent} from './agents/base_agent.js';
 export {
+  LoopAgentState,
+  createBaseAgentState,
+} from './agents/base_agent_state.js';
+export type {BaseAgentState} from './agents/base_agent_state.js';
+export {
   App,
   BaseEventsSummarizer,
   createEventsCompactionConfig,

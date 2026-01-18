@@ -8,7 +8,9 @@ import {Content} from '@google/genai';
 import {trace} from '@opentelemetry/api';
 
 import {createEvent, Event} from '../events/event.js';
+import {createEventActions} from '../events/event_actions.js';
 
+import {BaseAgentState} from './base_agent_state.js';
 import {CallbackContext} from './callback_context.js';
 import {InvocationContext} from './invocation_context.js';
 
@@ -356,6 +358,63 @@ export abstract class BaseAgent {
 
       subAgent.parentAgent = this;
     }
+  }
+
+  /**
+   * Loads the agent state from the invocation context.
+   *
+   * This method is used during resumable workflows to restore checkpoint data.
+   * Subclasses should override this method to return the appropriate state type.
+   *
+   * @param context The invocation context containing agent states.
+   * @returns The loaded agent state, or undefined if no state exists.
+   */
+  protected loadAgentState<T extends BaseAgentState>(
+      context: InvocationContext,
+      stateFactory?: (obj: Record<string, unknown>) => T,
+  ): T|undefined {
+    const stateObj = context.getAgentState(this.name);
+    if (stateObj === undefined) {
+      return undefined;
+    }
+
+    if (stateFactory) {
+      return stateFactory(stateObj);
+    }
+
+    // Return as-is if no factory provided
+    return stateObj as unknown as T;
+  }
+
+  /**
+   * Creates an event containing the current agent state for checkpointing.
+   *
+   * This method is used during resumable workflows to save checkpoint data.
+   *
+   * @param context The invocation context.
+   * @param agentState The agent state to save, or undefined to mark end of agent.
+   * @param endOfAgent Whether this marks the end of the agent's run.
+   * @returns An event with the agent state in its actions.
+   */
+  protected createAgentStateEvent(
+      context: InvocationContext,
+      agentState?: BaseAgentState,
+      endOfAgent?: boolean,
+  ): Event {
+    const actions = createEventActions();
+
+    if (endOfAgent === true) {
+      actions.endOfAgent = true;
+    } else if (agentState !== undefined) {
+      actions.agentState = agentState.toObject();
+    }
+
+    return createEvent({
+      invocationId: context.invocationId,
+      author: this.name,
+      branch: context.branch,
+      actions,
+    });
   }
 }
 

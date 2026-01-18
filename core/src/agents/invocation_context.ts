@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {Content} from '@google/genai';
+import {Content, FunctionCall} from '@google/genai';
 
+import {ResumabilityConfig} from '../apps/app.js';
 import {BaseArtifactService} from '../artifacts/base_artifact_service.js';
 import {BaseCredentialService} from '../auth/credential_service/base_credential_service.js';
+import {Event} from '../events/event.js';
 import {BaseMemoryService} from '../memory/base_memory_service.js';
 import {PluginManager} from '../plugins/plugin_manager.js';
 import {BaseSessionService} from '../sessions/base_session_service.js';
@@ -36,6 +38,9 @@ interface InvocationContextParams {
   liveRequestQueue?: LiveRequestQueue;
   activeStreamingTools?: Record<string, ActiveStreamingTool>;
   pluginManager: PluginManager;
+  resumabilityConfig?: ResumabilityConfig;
+  agentStates?: Record<string, Record<string, unknown>>;
+  endOfAgents?: Record<string, boolean>;
 }
 
 /**
@@ -179,6 +184,26 @@ export class InvocationContext {
   pluginManager: PluginManager;
 
   /**
+   * Configuration for session resumability.
+   *
+   * When enabled, allows pausing invocations on long-running function calls
+   * and resuming from the last checkpoint.
+   */
+  resumabilityConfig?: ResumabilityConfig;
+
+  /**
+   * The agent states stored during resumable invocations.
+   * Key is the agent name, value is the serialized agent state.
+   */
+  readonly agentStates: Record<string, Record<string, unknown>>;
+
+  /**
+   * Tracks which agents have finished their current run.
+   * Key is the agent name, value indicates end-of-agent status.
+   */
+  readonly endOfAgents: Record<string, boolean>;
+
+  /**
    * @param params The parameters for creating an invocation context.
    */
   constructor(params: InvocationContextParams) {
@@ -196,6 +221,9 @@ export class InvocationContext {
     this.liveRequestQueue = params.liveRequestQueue;
     this.activeStreamingTools = params.activeStreamingTools;
     this.pluginManager = params.pluginManager;
+    this.resumabilityConfig = params.resumabilityConfig;
+    this.agentStates = params.agentStates ?? {};
+    this.endOfAgents = params.endOfAgents ?? {};
   }
 
   /**
@@ -219,6 +247,166 @@ export class InvocationContext {
    */
   incrementLlmCallCount() {
     this.invocationCostManager.incrementAndEnforceLlmCallsLimit(this.runConfig);
+  }
+
+  /**
+   * Whether this invocation is resumable.
+   *
+   * Returns true if resumabilityConfig is set and isResumable is true.
+   */
+  get isResumable(): boolean {
+    return this.resumabilityConfig?.isResumable ?? false;
+  }
+
+  /**
+   * Sets the agent state for the given agent.
+   *
+   * @param agentName The name of the agent.
+   * @param agentState The serialized agent state, or undefined to clear.
+   * @param endOfAgent If true, marks the agent as finished. If undefined, clears the flag.
+   */
+  setAgentState(
+      agentName: string,
+      agentState?: Record<string, unknown>,
+      endOfAgent?: boolean,
+  ): void {
+    if (endOfAgent === true) {
+      // Agent is finished, mark as end and clear state
+      this.endOfAgents[agentName] = true;
+      delete this.agentStates[agentName];
+    } else if (agentState !== undefined) {
+      // Agent state provided, store it and clear end flag
+      this.agentStates[agentName] = agentState;
+      this.endOfAgents[agentName] = false;
+    } else {
+      // Clear both state and end flag
+      delete this.agentStates[agentName];
+      delete this.endOfAgents[agentName];
+    }
+  }
+
+  /**
+   * Gets the agent state for the given agent.
+   *
+   * @param agentName The name of the agent.
+   * @returns The serialized agent state, or undefined if not set.
+   */
+  getAgentState(agentName: string): Record<string, unknown>|undefined {
+    return this.agentStates[agentName];
+  }
+
+  /**
+   * Checks if the agent has finished its current run.
+   *
+   * @param agentName The name of the agent.
+   * @returns True if the agent is marked as finished.
+   */
+  isEndOfAgent(agentName: string): boolean {
+    return this.endOfAgents[agentName] ?? false;
+  }
+
+  /**
+   * Resets the agent states for the given agent and all its sub-agents.
+   *
+   * Used when restarting a loop iteration to clear checkpoint data.
+   *
+   * @param agent The agent whose state (and sub-agent states) should be reset.
+   */
+  resetSubAgentStates(agent: BaseAgent): void {
+    // Reset this agent's state
+    delete this.agentStates[agent.name];
+    delete this.endOfAgents[agent.name];
+
+    // Recursively reset all sub-agents
+    for (const subAgent of agent.subAgents) {
+      this.resetSubAgentStates(subAgent);
+    }
+  }
+
+  /**
+   * Determines if the invocation should pause due to long-running tools.
+   *
+   * Checks if the invocation is resumable and if the event contains
+   * function calls that match any of the configured long-running tool IDs.
+   *
+   * @param event The event to check for pause conditions.
+   * @returns True if the invocation should pause.
+   */
+  shouldPauseInvocation(event: Event): boolean {
+    if (!this.isResumable) {
+      return false;
+    }
+
+    // Check if event has long-running tool IDs and function calls
+    const longRunningToolIds = event.longRunningToolIds;
+    if (!longRunningToolIds || longRunningToolIds.length === 0) {
+      return false;
+    }
+
+    // Get function calls from the event content
+    const functionCalls = this.extractFunctionCalls(event);
+    if (functionCalls.length === 0) {
+      return false;
+    }
+
+    // Check if any function call ID matches a long-running tool ID
+    for (const fc of functionCalls) {
+      if (fc.id && longRunningToolIds.includes(fc.id)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Populates agent states from session event history.
+   *
+   * Used at the start of a resumable invocation to restore checkpoint data.
+   */
+  populateInvocationAgentStates(): void {
+    if (!this.session || !this.session.events) {
+      return;
+    }
+
+    // Iterate through events to find agent state checkpoints
+    for (const event of this.session.events) {
+      const author = event.author;
+      if (!author) {
+        continue;
+      }
+
+      if (event.actions.agentState !== undefined) {
+        this.agentStates[author] = event.actions.agentState;
+        this.endOfAgents[author] = false;
+      }
+      if (event.actions.endOfAgent === true) {
+        this.endOfAgents[author] = true;
+        delete this.agentStates[author];
+      }
+    }
+  }
+
+  /**
+   * Extracts function calls from an event's content.
+   *
+   * @param event The event to extract function calls from.
+   * @returns Array of function calls found in the event.
+   */
+  private extractFunctionCalls(event: Event): FunctionCall[] {
+    const functionCalls: FunctionCall[] = [];
+
+    if (!event.content?.parts) {
+      return functionCalls;
+    }
+
+    for (const part of event.content.parts) {
+      if ('functionCall' in part && part.functionCall) {
+        functionCalls.push(part.functionCall);
+      }
+    }
+
+    return functionCalls;
   }
 }
 
