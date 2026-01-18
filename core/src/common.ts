@@ -25,7 +25,7 @@ export {InvocationContext} from './agents/invocation_context.js';
 export {LiveRequestQueue} from './agents/live_request_queue.js';
 export type {LiveRequest} from './agents/live_request_queue.js';
 export {LlmAgent} from './agents/llm_agent.js';
-export type {AfterModelCallback, AfterToolCallback, BeforeModelCallback, BeforeToolCallback, SingleAfterModelCallback, SingleAfterToolCallback, SingleBeforeModelCallback, SingleBeforeToolCallback} from './agents/llm_agent.js';
+export type {AfterModelCallback, AfterToolCallback, BeforeModelCallback, BeforeToolCallback, OnModelErrorCallback, OnToolErrorCallback, SingleAfterModelCallback, SingleAfterToolCallback, SingleBeforeModelCallback, SingleBeforeToolCallback, SingleOnModelErrorCallback, SingleOnToolErrorCallback} from './agents/llm_agent.js';
 export {LoopAgent} from './agents/loop_agent.js';
 export {ParallelAgent} from './agents/parallel_agent.js';
 export type {RunConfig} from './agents/run_config.js';

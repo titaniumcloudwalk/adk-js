@@ -17,7 +17,7 @@ import {ToolContext} from '../tools/tool_context.js';
 import {randomUUID} from '../utils/env_aware_utils.js';
 import {logger} from '../utils/logger.js';
 
-import {SingleAfterToolCallback, SingleBeforeToolCallback} from './llm_agent.js';
+import {SingleAfterToolCallback, SingleBeforeToolCallback, SingleOnToolErrorCallback} from './llm_agent.js';
 
 const AF_FUNCTION_CALL_ID_PREFIX = 'adk-';
 export const REQUEST_EUC_FUNCTION_CALL_NAME = 'adk_request_credential';
@@ -219,6 +219,7 @@ export async function handleFunctionCallsAsync({
   toolsDict,
   beforeToolCallbacks,
   afterToolCallbacks,
+  onToolErrorCallbacks,
   filters,
   toolConfirmationDict,
 }: {
@@ -227,6 +228,7 @@ export async function handleFunctionCallsAsync({
   toolsDict: Record<string, BaseTool>,
   beforeToolCallbacks: SingleBeforeToolCallback[],
   afterToolCallbacks: SingleAfterToolCallback[],
+  onToolErrorCallbacks?: SingleOnToolErrorCallback[],
   filters?: Set<string>,
   toolConfirmationDict?: Record<string, ToolConfirmation>,
 }): Promise<Event|null> {
@@ -237,6 +239,7 @@ export async function handleFunctionCallsAsync({
     toolsDict: toolsDict,
     beforeToolCallbacks: beforeToolCallbacks,
     afterToolCallbacks: afterToolCallbacks,
+    onToolErrorCallbacks: onToolErrorCallbacks,
     filters: filters,
     toolConfirmationDict: toolConfirmationDict,
   });
@@ -271,6 +274,7 @@ async function executeSingleFunctionCallAsync({
   toolsDict,
   beforeToolCallbacks,
   afterToolCallbacks,
+  onToolErrorCallbacks,
   toolConfirmation,
 }: {
   invocationContext: InvocationContext,
@@ -278,6 +282,7 @@ async function executeSingleFunctionCallAsync({
   toolsDict: Record<string, BaseTool>,
   beforeToolCallbacks: SingleBeforeToolCallback[],
   afterToolCallbacks: SingleAfterToolCallback[],
+  onToolErrorCallbacks?: SingleOnToolErrorCallback[],
   toolConfirmation?: ToolConfirmation,
 }): Promise<Event|null> {
   const {tool, toolContext} = getToolAndContext(
@@ -330,7 +335,8 @@ async function executeSingleFunctionCallAsync({
       );
     } catch (e: unknown) {
       if (e instanceof Error) {
-        const onToolErrorResponse =
+        // Step 3a: Try plugins to recover from the error
+        let onToolErrorResponse =
             await invocationContext.pluginManager.runOnToolErrorCallback(
                 {
                   tool: tool,
@@ -339,6 +345,21 @@ async function executeSingleFunctionCallAsync({
                   error: e,
                 },
             );
+
+        // Step 3b: If no plugins returned a response, try agent-level callbacks
+        if (onToolErrorResponse == null && onToolErrorCallbacks) {
+          for (const callback of onToolErrorCallbacks) {
+            onToolErrorResponse = await callback({
+              tool: tool,
+              args: functionArgs,
+              context: toolContext,
+              error: e,
+            });
+            if (onToolErrorResponse) {
+              break;
+            }
+          }
+        }
 
         // Set function response to the result of the error callback and
         // continue execution, do not shortcut
@@ -452,6 +473,7 @@ export async function handleFunctionCallList({
   toolsDict,
   beforeToolCallbacks,
   afterToolCallbacks,
+  onToolErrorCallbacks,
   filters,
   toolConfirmationDict,
 }: {
@@ -460,6 +482,7 @@ export async function handleFunctionCallList({
   toolsDict: Record<string, BaseTool>,
   beforeToolCallbacks: SingleBeforeToolCallback[],
   afterToolCallbacks: SingleAfterToolCallback[],
+  onToolErrorCallbacks?: SingleOnToolErrorCallback[],
   filters?: Set<string>,
   toolConfirmationDict?: Record<string, ToolConfirmation>,
 }): Promise<Event|null> {
@@ -481,6 +504,7 @@ export async function handleFunctionCallList({
       toolsDict,
       beforeToolCallbacks,
       afterToolCallbacks,
+      onToolErrorCallbacks,
       toolConfirmation,
     });
   });
