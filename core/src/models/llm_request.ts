@@ -7,6 +7,7 @@
 import {Content, FunctionDeclaration, GenerateContentConfig, LiveConnectConfig, SchemaUnion} from '@google/genai';
 
 import {BaseTool} from '../tools/base_tool.js';
+import {CacheMetadata, ContextCacheConfig} from './cache_metadata.js';
 
 /**
  * LLM request class that allows passing in tools, output schema and system
@@ -35,6 +36,39 @@ export interface LlmRequest {
    * The tools dictionary. Excluded from JSON serialization.
    */
   toolsDict: {[key: string]: BaseTool};
+
+  /**
+   * Configuration for context caching behavior.
+   *
+   * When set, controls how context caching is used to optimize costs
+   * and performance for frequently used content.
+   */
+  cacheConfig?: ContextCacheConfig;
+
+  /**
+   * Metadata for an existing context cache.
+   *
+   * If provided, the LLM will attempt to use this cached content
+   * instead of reprocessing the full context.
+   */
+  cacheMetadata?: CacheMetadata;
+
+  /**
+   * The number of tokens in the cacheable contents.
+   *
+   * This is used to determine if caching is beneficial based on
+   * the minimum token threshold in cacheConfig.
+   */
+  cacheableContentsTokenCount?: number;
+
+  /**
+   * Previous interaction ID for Gemini Interactions API.
+   *
+   * When using the Interactions API, this field contains the ID from
+   * the previous interaction, enabling stateful conversation without
+   * sending full history.
+   */
+  previousInteractionId?: string;
 }
 
 /**

@@ -6,6 +6,8 @@
 
 import {Content, FinishReason, GenerateContentResponse, GenerateContentResponseUsageMetadata, GroundingMetadata, LiveServerSessionResumptionUpdate, Transcription,} from '@google/genai';
 
+import {CacheMetadata} from './cache_metadata.js';
+
 /**
  * LLM response class that provides the first candidate response from the
  * model if available. Otherwise, returns error code and message.
@@ -80,6 +82,24 @@ export interface LlmResponse {
    * Audio transcription of model output.
    */
   outputTranscription?: Transcription;
+
+  /**
+   * Metadata for the context cache used or created during this request.
+   *
+   * When caching is enabled, this field contains information about the
+   * cache that was used or newly created, including expiration time
+   * and token counts.
+   */
+  cacheMetadata?: CacheMetadata;
+
+  /**
+   * Interaction ID for Gemini Interactions API.
+   *
+   * When using the Interactions API, this field contains the interaction ID
+   * that can be used as previousInteractionId in subsequent requests to
+   * maintain stateful conversation context.
+   */
+  interactionId?: string;
 }
 
 /**
