@@ -26,6 +26,17 @@ export interface OpenIdConnectWithConfig extends OpenAPIV3
 export type AuthScheme = OpenAPIV3.SecuritySchemeObject|OpenIdConnectWithConfig;
 
 /**
+ * Enum representing the type of authentication scheme.
+ * Maps to OpenAPI security scheme types.
+ */
+export enum AuthSchemeType {
+  apiKey = 'apiKey',
+  http = 'http',
+  oauth2 = 'oauth2',
+  openIdConnect = 'openIdConnect',
+}
+
+/**
  * Represents the OAuth2 flow (or grant type).
  */
 export enum OAuthGrantType {

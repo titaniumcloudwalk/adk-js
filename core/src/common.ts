@@ -181,6 +181,25 @@ export {isGemini2OrAbove} from './utils/model_name.js';
 export {zodObjectToSchema} from './utils/simple_zod_to_json.js';
 export {version} from './version.js';
 
+// OpenAPI tools
+export {
+  OpenAPIToolset,
+  OpenApiSpecParser,
+  OperationParser,
+  RestApiTool,
+  ToolAuthHandler,
+} from './tools/openapi/index.js';
+export type {
+  ApiParameter,
+  AuthPreparationResult,
+  AuthPreparationState,
+  OpenAPIToolsetParams,
+  OperationEndpoint,
+  ParsedOperation,
+  RestApiToolParams,
+} from './tools/openapi/index.js';
+export {AuthSchemeType} from './auth/auth_schemes.js';
+
 export * from './artifacts/base_artifact_service.js';
 export * from './memory/base_memory_service.js';
 export * from './memory/memory_entry.js';
