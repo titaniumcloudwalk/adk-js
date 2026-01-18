@@ -28,6 +28,7 @@ import {
   showEvalSetCommand,
   deleteEvalSetCommand,
 } from './cli_eval.js';
+import {runConformanceRecord, runConformanceTest} from './conformance/index.js';
 
 dotenv.config();
 
@@ -634,6 +635,40 @@ EVAL_SET_COMMAND.command('delete')
     .action(async (agentPath: string, evalSetId: string, options: Record<string, string>) => {
       setLogLevel(getLogLevelFromOptions(options));
       await deleteEvalSetCommand(getAbsolutePath(agentPath), evalSetId, options['eval_storage_uri']);
+    });
+
+// Conformance testing commands
+const CONFORMANCE_COMMAND = program.command('conformance')
+    .description('Run conformance tests for regression testing')
+    .allowUnknownOption()
+    .allowExcessArguments();
+
+CONFORMANCE_COMMAND.command('record')
+    .description('Record agent interactions for conformance tests')
+    .argument('[paths...]', 'Directories containing test cases (spec.yaml files)', ['tests/'])
+    .addOption(VERBOSE_OPTION)
+    .addOption(LOG_LEVEL_OPTION)
+    .action(async (paths: string[], options: Record<string, string>) => {
+      setLogLevel(getLogLevelFromOptions(options));
+      const absolutePaths = paths.map(p => getAbsolutePath(p));
+      await runConformanceRecord(absolutePaths);
+    });
+
+CONFORMANCE_COMMAND.command('test')
+    .description('Run conformance tests against recorded interactions')
+    .argument('[paths...]', 'Directories containing test cases (spec.yaml files)', ['tests/'])
+    .option(
+        '--mode <string>',
+        'Test mode: "replay" (use recorded responses) or "live" (make real calls)',
+        'replay')
+    .addOption(VERBOSE_OPTION)
+    .addOption(LOG_LEVEL_OPTION)
+    .action(async (paths: string[], options: Record<string, string>) => {
+      setLogLevel(getLogLevelFromOptions(options));
+      const absolutePaths = paths.map(p => getAbsolutePath(p));
+      const mode = options['mode'] as 'replay' | 'live';
+      const exitCode = await runConformanceTest(absolutePaths, mode);
+      process.exit(exitCode);
     });
 
 program.parse(process.argv);
