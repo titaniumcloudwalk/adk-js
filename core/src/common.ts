@@ -169,6 +169,8 @@ export {DebugLoggingPlugin} from './plugins/debug_logging_plugin.js';
 export type {DebugLoggingPluginOptions, DebugEntry, InvocationDebugState} from './plugins/debug_logging_plugin.js';
 export {MultimodalToolResultsPlugin, PARTS_RETURNED_BY_TOOLS_ID} from './plugins/multimodal_tool_results_plugin.js';
 export type {MultimodalToolResultsPluginOptions} from './plugins/multimodal_tool_results_plugin.js';
+export {BigQueryAgentAnalyticsPlugin, TraceManager, recursiveSmartTruncate} from './plugins/bigquery_agent_analytics_plugin.js';
+export type {BigQueryLoggerConfig, RetryConfig} from './plugins/bigquery_agent_analytics_plugin.js';
 export {BasePlanner} from './planners/base_planner.js';
 export {BuiltInPlanner} from './planners/built_in_planner.js';
 export {PlanReActPlanner, PLANNING_TAG, REPLANNING_TAG, REASONING_TAG, ACTION_TAG, FINAL_ANSWER_TAG} from './planners/plan_re_act_planner.js';
