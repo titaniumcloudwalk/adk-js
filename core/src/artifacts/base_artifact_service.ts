@@ -82,6 +82,41 @@ export interface ListVersionsRequest {
 }
 
 /**
+ * The parameters for `getArtifactVersion`.
+ */
+export interface GetArtifactVersionRequest {
+  /** The app name. */
+  appName: string;
+  /** The user ID. */
+  userId: string;
+  /** The session ID. */
+  sessionId: string;
+  /** The filename of the artifact. */
+  filename: string;
+  /**
+   * The version of the artifact. If not provided, the latest version
+   * will be returned.
+   */
+  version?: number;
+}
+
+/**
+ * Metadata describing a specific version of an artifact.
+ */
+export interface ArtifactVersion {
+  /** Monotonically increasing identifier for the artifact version. */
+  version: number;
+  /** Canonical URI referencing the persisted artifact payload. */
+  canonicalUri: string;
+  /** Optional user-supplied metadata stored with the artifact. */
+  customMetadata?: Record<string, unknown>;
+  /** Unix timestamp (seconds) when the version record was created. */
+  createTime: number;
+  /** MIME type when the artifact payload is stored as binary data. */
+  mimeType?: string;
+}
+
+/**
  *  Interface for artifact services.
  */
 export interface BaseArtifactService {
@@ -135,4 +170,14 @@ export interface BaseArtifactService {
    *     artifact.
    */
   listVersions(request: ListVersionsRequest): Promise<number[]>;
+
+  /**
+   * Gets the metadata for a specific version of an artifact.
+   *
+   * @param request The request to get artifact version info.
+   * @return A promise that resolves to the artifact version metadata or
+   *     undefined if not found.
+   */
+  getArtifactVersion(
+      request: GetArtifactVersionRequest): Promise<ArtifactVersion|undefined>;
 }

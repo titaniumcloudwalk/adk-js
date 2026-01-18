@@ -7,7 +7,7 @@
 import {Part} from '@google/genai';
 
 import {InvocationContext} from '../agents/invocation_context.js';
-import {BaseArtifactService, DeleteArtifactRequest, ListArtifactKeysRequest, ListVersionsRequest, LoadArtifactRequest, SaveArtifactRequest,} from '../artifacts/base_artifact_service.js';
+import {ArtifactVersion, BaseArtifactService, DeleteArtifactRequest, GetArtifactVersionRequest, ListArtifactKeysRequest, ListVersionsRequest, LoadArtifactRequest, SaveArtifactRequest,} from '../artifacts/base_artifact_service.js';
 
 import {ToolContext} from './tool_context.js';
 
@@ -51,5 +51,10 @@ export class ForwardingArtifactService implements BaseArtifactService {
 
     return this.toolContext.invocationContext.artifactService.listVersions(
         request);
+  }
+
+  async getArtifactVersion(
+      request: GetArtifactVersionRequest): Promise<ArtifactVersion|undefined> {
+    return this.toolContext.getArtifactVersion(request.filename, request.version);
   }
 }

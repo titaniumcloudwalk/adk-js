@@ -6,7 +6,7 @@
 
 import {Part} from '@google/genai';
 
-import {BaseArtifactService, DeleteArtifactRequest, ListArtifactKeysRequest, ListVersionsRequest, LoadArtifactRequest, SaveArtifactRequest,} from './base_artifact_service.js';
+import {ArtifactVersion, BaseArtifactService, DeleteArtifactRequest, GetArtifactVersionRequest, ListArtifactKeysRequest, ListVersionsRequest, LoadArtifactRequest, SaveArtifactRequest,} from './base_artifact_service.js';
 
 /**
  * An in-memory implementation of the ArtifactService.
@@ -99,6 +99,40 @@ export class InMemoryArtifactService implements BaseArtifactService {
     }
 
     return Promise.resolve(versions);
+  }
+
+  getArtifactVersion({
+    appName,
+    userId,
+    sessionId,
+    filename,
+    version,
+  }: GetArtifactVersionRequest): Promise<ArtifactVersion|undefined> {
+    const path = artifactPath(appName, userId, sessionId, filename);
+    const versions = this.artifacts[path];
+
+    if (!versions) {
+      return Promise.resolve(undefined);
+    }
+
+    if (version === undefined) {
+      version = versions.length - 1;
+    }
+
+    if (version < 0 || version >= versions.length) {
+      return Promise.resolve(undefined);
+    }
+
+    const artifact = versions[version];
+    const artifactVersion: ArtifactVersion = {
+      version,
+      canonicalUri: path,
+      createTime: Date.now() / 1000, // Unix timestamp in seconds
+      customMetadata: {},
+      mimeType: artifact.inlineData?.mimeType,
+    };
+
+    return Promise.resolve(artifactVersion);
   }
 }
 

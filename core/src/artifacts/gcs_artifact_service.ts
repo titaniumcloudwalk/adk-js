@@ -7,7 +7,7 @@
 import {Bucket, Storage} from '@google-cloud/storage';
 import {createPartFromBase64, createPartFromText, Part} from '@google/genai';
 
-import {BaseArtifactService, DeleteArtifactRequest, ListArtifactKeysRequest, ListVersionsRequest, LoadArtifactRequest, SaveArtifactRequest} from './base_artifact_service.js';
+import {ArtifactVersion, BaseArtifactService, DeleteArtifactRequest, GetArtifactVersionRequest, ListArtifactKeysRequest, ListVersionsRequest, LoadArtifactRequest, SaveArtifactRequest} from './base_artifact_service.js';
 
 export class GcsArtifactService implements BaseArtifactService {
   private readonly bucket: Bucket;
@@ -119,6 +119,41 @@ export class GcsArtifactService implements BaseArtifactService {
     }
 
     return versions
+  }
+
+  async getArtifactVersion(
+      request: GetArtifactVersionRequest): Promise<ArtifactVersion|undefined> {
+    let version = request.version;
+    if (version === undefined) {
+      const versions = await this.listVersions(request);
+
+      if (versions.length === 0) {
+        return undefined;
+      }
+
+      version = Math.max(...versions);
+    }
+
+    const file = this.bucket.file(getFileName({
+      ...request,
+      version,
+    }));
+
+    try {
+      const [metadata] = await file.getMetadata();
+      const artifactVersion: ArtifactVersion = {
+        version,
+        canonicalUri: `gs://${this.bucket.name}/${file.name}`,
+        createTime: new Date(metadata.timeCreated!).getTime() / 1000,
+        customMetadata: metadata.metadata as Record<string, unknown> || {},
+        mimeType: metadata.contentType,
+      };
+
+      return artifactVersion;
+    } catch (error) {
+      // File doesn't exist
+      return undefined;
+    }
   }
 }
 
