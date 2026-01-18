@@ -251,3 +251,66 @@ export * from './memory/base_memory_service.js';
 export * from './memory/memory_entry.js';
 export * from './sessions/base_session_service.js';
 export * from './tools/base_tool.js';
+
+// A2A Protocol Support (experimental)
+export {
+  // Experimental warning
+  logA2aExperimentalWarning,
+  a2aExperimental,
+  a2aExperimentalMethod,
+  resetA2aWarning,
+  // Converters - Utils
+  getAdkMetadataKey,
+  toA2aContextId,
+  fromA2aContextId,
+  ADK_METADATA_KEY_PREFIX,
+  ADK_CONTEXT_ID_PREFIX,
+  ADK_CONTEXT_ID_SEPARATOR,
+  // Converters - Part
+  convertA2aPartToGenaiPart,
+  convertGenaiPartToA2aPart,
+  A2A_DATA_PART_METADATA_TYPE_KEY,
+  A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY,
+  A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL,
+  A2A_DATA_PART_METADATA_TYPE_FUNCTION_RESPONSE,
+  A2A_DATA_PART_METADATA_TYPE_CODE_EXECUTION_RESULT,
+  A2A_DATA_PART_METADATA_TYPE_EXECUTABLE_CODE,
+  A2A_DATA_PART_TEXT_MIME_TYPE,
+  // Converters - Request
+  convertA2aRequestToAgentRunRequest,
+  // Converters - Event
+  convertA2aMessageToEvent,
+  convertEventToA2aMessage,
+  convertEventToA2aEvents,
+  createArtifactId,
+  // Executor
+  A2aAgentExecutor,
+  TaskResultAggregator,
+} from './a2a/index.js';
+
+export type {
+  ParsedContextId,
+  A2ATextPart,
+  A2AFileWithUri,
+  A2AFileWithBytes,
+  A2AFilePart,
+  A2ADataPart,
+  A2APart,
+  A2APartToGenAIPartConverter,
+  GenAIPartToA2APartConverter,
+  A2ARequestContext,
+  A2AMessage,
+  A2ATask,
+  A2ATaskStatus,
+  A2ATaskState,
+  A2AArtifact,
+  AgentRunRequest,
+  A2ARequestToAgentRunRequestConverter,
+  A2AEvent,
+  A2ATaskStatusUpdateEvent,
+  A2ATaskArtifactUpdateEvent,
+  AdkEventToA2AEventsConverter,
+  A2AEventQueue,
+  A2aAgentExecutorConfig,
+  RunnerFactory,
+} from './a2a/index.js';
