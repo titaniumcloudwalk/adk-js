@@ -122,6 +122,8 @@ export {Runner} from './runner/runner.js';
 export {DatabaseSessionService} from './sessions/database_session_service.js';
 export type {DatabaseSessionServiceOptions} from './sessions/database_session_service.js';
 export {InMemorySessionService} from './sessions/in_memory_session_service.js';
+export {VertexAiSessionService} from './sessions/vertex_ai_session_service.js';
+export type {VertexAiSessionServiceOptions} from './sessions/vertex_ai_session_service.js';
 export {createSession} from './sessions/session.js';
 export type {Session} from './sessions/session.js';
 export {extractStateDelta, mergeState} from './sessions/session_util.js';
