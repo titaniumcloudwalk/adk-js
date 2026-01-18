@@ -239,6 +239,16 @@ export class Gemini extends BaseLlm {
     /projects\/.+\/locations\/.+\/publishers\/google\/models\/gemini.+/,
   ];
 
+  /**
+   * Returns whether the Interactions API is enabled for this Gemini instance.
+   *
+   * The Interactions API enables stateful conversation chaining using
+   * previous_interaction_id instead of sending full conversation history.
+   */
+  get isUsingInteractionsApi(): boolean {
+    return this.useInteractionsApi;
+  }
+
   private _apiClient?: GoogleGenAI;
   private _apiBackend?: GoogleLLMVariant;
   private _trackingHeaders?: Record<string, string>;

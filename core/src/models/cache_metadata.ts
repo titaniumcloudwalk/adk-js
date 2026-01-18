@@ -5,52 +5,98 @@
  */
 
 /**
- * Metadata for a Gemini context cache.
+ * Metadata for context cache associated with LLM responses.
  *
- * Context caching allows storing frequently used content to reduce costs
- * and improve performance for long conversations.
+ * This class stores cache identification, usage tracking, and lifecycle
+ * information for a particular cache instance. It can be in two states:
+ *
+ * 1. Active cache state: cacheName is set, all fields populated
+ * 2. Fingerprint-only state: cacheName is undefined, only fingerprint and
+ *    contentsCount are set for prefix matching
+ *
+ * Token counts (cached and total) are available in the LlmResponse.usageMetadata
+ * and should be accessed from there to avoid duplication.
  */
 export interface CacheMetadata {
   /**
-   * The resource name of the cached content.
-   * Format: 'projects/{project}/locations/{location}/cachedContents/{cache_id}'
-   * or just the cache ID for Gemini API (without project/location).
+   * The full resource name of the cached content (e.g.,
+   * 'projects/123/locations/us-central1/cachedContents/456').
+   * Undefined when no active cache exists (fingerprint-only state).
    */
-  name: string;
+  cacheName?: string;
+
+  /**
+   * The time when the cache expires.
+   *
+   * Can be either:
+   * - A Date object (legacy format)
+   * - A Unix timestamp in milliseconds (Python SDK format)
+   *
+   * Undefined when no active cache exists.
+   */
+  expireTime?: Date | number;
+
+  /**
+   * Hash of cacheable contents (instruction + tools + contents).
+   * Always present for prefix matching.
+   */
+  fingerprint?: string;
+
+  /**
+   * Number of invocations this cache has been used for.
+   * Undefined when no active cache exists.
+   */
+  invocationsUsed?: number;
+
+  /**
+   * Number of contents. When active cache exists, this is the count of
+   * cached contents. When no active cache exists, this is the total
+   * count of contents in the request.
+   */
+  contentsCount?: number;
+
+  /**
+   * Unix timestamp when the cache was created.
+   * Undefined when no active cache exists.
+   */
+  createdAt?: number;
+
+  // Legacy fields for backward compatibility with older cache implementations
+  /**
+   * The resource name of the cached content.
+   * @deprecated Use cacheName instead for consistency with Python SDK.
+   */
+  name?: string;
 
   /**
    * The timestamp when the cached content was created.
+   * @deprecated Use createdAt (Unix timestamp) instead.
    */
-  createTime: Date;
+  createTime?: Date;
 
   /**
    * The timestamp when the cached content was last updated.
+   * @deprecated No longer used in the Python SDK.
    */
-  updateTime: Date;
-
-  /**
-   * The timestamp when the cached content will expire.
-   * After this time, the cache will be automatically deleted.
-   */
-  expireTime: Date;
+  updateTime?: Date;
 
   /**
    * A human-readable display name for the cached content.
+   * @deprecated No longer used in the Python SDK.
    */
   displayName?: string;
 
   /**
    * The model identifier for which this cache was created.
+   * @deprecated No longer used in the Python SDK.
    */
   model?: string;
 
   /**
    * Usage metadata for the cache, such as token counts.
+   * @deprecated Use LlmResponse.usageMetadata instead.
    */
   usageMetadata?: {
-    /**
-     * Total number of tokens in the cached content.
-     */
     totalTokenCount?: number;
   };
 }

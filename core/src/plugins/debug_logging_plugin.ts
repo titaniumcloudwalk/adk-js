@@ -404,9 +404,14 @@ export class DebugLoggingPlugin extends BasePlugin {
       requestData['cacheConfig'] = this.safeSerialize(llmRequest.cacheConfig);
     }
     if (llmRequest.cacheMetadata) {
+      const expireTime = llmRequest.cacheMetadata.expireTime;
       requestData['cacheMetadata'] = {
-        name: llmRequest.cacheMetadata.name,
-        expireTime: llmRequest.cacheMetadata.expireTime?.toISOString(),
+        name: llmRequest.cacheMetadata.name ?? llmRequest.cacheMetadata.cacheName,
+        expireTime: expireTime instanceof Date
+          ? expireTime.toISOString()
+          : expireTime !== undefined
+            ? new Date(expireTime).toISOString()
+            : undefined,
       };
     }
 

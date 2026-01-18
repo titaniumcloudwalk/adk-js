@@ -24,6 +24,16 @@ export type {
   LlmEventSummarizerParams,
   ResumabilityConfig,
 } from './apps/index.js';
+export {
+  BaseLlmRequestProcessor,
+  BaseLlmResponseProcessor,
+} from './agents/base_llm_processor.js';
+export {
+  ContextCacheRequestProcessor,
+  contextCacheRequestProcessor,
+  InteractionsRequestProcessor,
+  interactionsRequestProcessor,
+} from './flows/index.js';
 export {CallbackContext} from './agents/callback_context.js';
 export {
   functionsExportedForTestingOnly,

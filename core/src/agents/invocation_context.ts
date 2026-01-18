@@ -11,6 +11,7 @@ import {BaseArtifactService} from '../artifacts/base_artifact_service.js';
 import {BaseCredentialService} from '../auth/credential_service/base_credential_service.js';
 import {Event} from '../events/event.js';
 import {BaseMemoryService} from '../memory/base_memory_service.js';
+import {ContextCacheConfig} from '../models/cache_metadata.js';
 import {PluginManager} from '../plugins/plugin_manager.js';
 import {BaseSessionService} from '../sessions/base_session_service.js';
 import {Session} from '../sessions/session.js';
@@ -28,6 +29,7 @@ interface InvocationContextParams {
   sessionService?: BaseSessionService;
   memoryService?: BaseMemoryService;
   credentialService?: BaseCredentialService;
+  contextCacheConfig?: ContextCacheConfig;
   invocationId: string;
   branch?: string;
   agent: BaseAgent;
@@ -117,6 +119,14 @@ export class InvocationContext {
   readonly sessionService?: BaseSessionService;
   readonly memoryService?: BaseMemoryService;
   readonly credentialService?: BaseCredentialService;
+
+  /**
+   * Configuration for context caching.
+   *
+   * When set, enables context caching for LLM requests to reduce costs
+   * and improve performance for long conversations.
+   */
+  readonly contextCacheConfig?: ContextCacheConfig;
 
   /**
    * The id of this invocation context.
@@ -225,6 +235,8 @@ export class InvocationContext {
     this.artifactService = params.artifactService;
     this.sessionService = params.sessionService;
     this.memoryService = params.memoryService;
+    this.credentialService = params.credentialService;
+    this.contextCacheConfig = params.contextCacheConfig;
     this.invocationId = params.invocationId;
     this.branch = params.branch;
     this.agent = params.agent;

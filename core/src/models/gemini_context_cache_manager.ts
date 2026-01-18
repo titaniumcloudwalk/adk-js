@@ -88,8 +88,16 @@ export class GeminiContextCacheManager {
       // In production, this would call:
       // const cache = await this.client.cacheManager.create({...});
 
+      const cacheName = `cache_${fingerprint.substring(0, 16)}`;
       const cacheMetadata: CacheMetadata = {
-        name: `cache_${fingerprint.substring(0, 16)}`,
+        // New fields (Python SDK compatible)
+        cacheName,
+        fingerprint,
+        contentsCount: contents.length,
+        createdAt: Date.now(),
+        invocationsUsed: 0,
+        // Legacy fields (for backward compatibility)
+        name: cacheName,
         createTime: new Date(),
         updateTime: new Date(),
         expireTime,
@@ -100,8 +108,8 @@ export class GeminiContextCacheManager {
         },
       };
 
-      this.caches.set(cacheMetadata.name, cacheMetadata);
-      logger.info(`Created context cache: ${cacheMetadata.name}, expires: ${expireTime.toISOString()}`);
+      this.caches.set(cacheName, cacheMetadata);
+      logger.info(`Created context cache: ${cacheName}, expires: ${expireTime.toISOString()}`);
 
       return cacheMetadata;
     } catch (error) {
@@ -137,11 +145,16 @@ export class GeminiContextCacheManager {
    * @returns True if the cache is valid, false otherwise.
    */
   validateCache(metadata: CacheMetadata): boolean {
-    const now = new Date();
+    const now = Date.now();
 
     // Check if cache has expired
-    if (metadata.expireTime <= now) {
-      logger.debug(`Cache ${metadata.name} has expired`);
+    // Handle both Date and number (timestamp) formats
+    const expireTimeMs = metadata.expireTime instanceof Date
+      ? metadata.expireTime.getTime()
+      : metadata.expireTime;
+
+    if (expireTimeMs === undefined || expireTimeMs <= now) {
+      logger.debug(`Cache ${metadata.name ?? metadata.cacheName} has expired`);
       return false;
     }
 
@@ -183,11 +196,16 @@ export class GeminiContextCacheManager {
    * expire automatically based on their TTL.
    */
   cleanupExpiredCaches(): void {
-    const now = new Date();
+    const now = Date.now();
     const expiredCaches: string[] = [];
 
     for (const [name, metadata] of this.caches.entries()) {
-      if (metadata.expireTime <= now) {
+      // Handle both Date and number (timestamp) formats
+      const expireTimeMs = metadata.expireTime instanceof Date
+        ? metadata.expireTime.getTime()
+        : metadata.expireTime;
+
+      if (expireTimeMs === undefined || expireTimeMs <= now) {
         expiredCaches.push(name);
       }
     }
