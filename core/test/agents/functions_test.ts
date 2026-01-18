@@ -284,6 +284,272 @@ describe('handleFunctionCallList', () => {
          error: 'Error in tool \'errorTool\': tool error message content',
        });
      });
+
+  describe('parallel execution', () => {
+    it('should execute multiple tools in parallel with improved performance',
+       async () => {
+         // Create tools with artificial delays to test parallelization
+         const delayTool1 = new FunctionTool({
+           name: 'delayTool1',
+           description: 'tool with 100ms delay',
+           parameters: z.object({}),
+           execute: async () => {
+             await new Promise(resolve => setTimeout(resolve, 100));
+             return {result: 'tool1 executed'};
+           },
+         });
+
+         const delayTool2 = new FunctionTool({
+           name: 'delayTool2',
+           description: 'tool with 100ms delay',
+           parameters: z.object({}),
+           execute: async () => {
+             await new Promise(resolve => setTimeout(resolve, 100));
+             return {result: 'tool2 executed'};
+           },
+         });
+
+         const delayTool3 = new FunctionTool({
+           name: 'delayTool3',
+           description: 'tool with 100ms delay',
+           parameters: z.object({}),
+           execute: async () => {
+             await new Promise(resolve => setTimeout(resolve, 100));
+             return {result: 'tool3 executed'};
+           },
+         });
+
+         const functionCalls: FunctionCall[] = [
+           {id: randomIdForTestingOnly(), name: 'delayTool1', args: {}},
+           {id: randomIdForTestingOnly(), name: 'delayTool2', args: {}},
+           {id: randomIdForTestingOnly(), name: 'delayTool3', args: {}},
+         ];
+
+         const toolsDict = {
+           'delayTool1': delayTool1,
+           'delayTool2': delayTool2,
+           'delayTool3': delayTool3,
+         };
+
+         const startTime = Date.now();
+         const event = await handleFunctionCallList({
+           invocationContext,
+           functionCalls,
+           toolsDict,
+           beforeToolCallbacks: [],
+           afterToolCallbacks: [],
+         });
+         const duration = Date.now() - startTime;
+
+         // Verify all tools executed
+         expect(event).not.toBeNull();
+         const parts = event!.content!.parts!;
+         expect(parts.length).toBe(3);
+
+         // Verify parallel execution: should take ~100ms (parallel) not ~300ms
+         // (sequential) Allow some margin for execution overhead
+         expect(duration).toBeLessThan(200);  // Much less than 300ms sequential
+         expect(duration).toBeGreaterThanOrEqual(80);  // At least 100ms-ish
+       });
+
+    it('should isolate errors - one tool failure does not block other tools',
+       async () => {
+         const successTool1 = new FunctionTool({
+           name: 'successTool1',
+           description: 'successful tool',
+           parameters: z.object({}),
+           execute: async () => {
+             await new Promise(resolve => setTimeout(resolve, 50));
+             return {result: 'success1'};
+           },
+         });
+
+         const failureTool = new FunctionTool({
+           name: 'failureTool',
+           description: 'failing tool',
+           parameters: z.object({}),
+           execute: async () => {
+             await new Promise(resolve => setTimeout(resolve, 50));
+             throw new Error('tool failed');
+           },
+         });
+
+         const successTool2 = new FunctionTool({
+           name: 'successTool2',
+           description: 'successful tool',
+           parameters: z.object({}),
+           execute: async () => {
+             await new Promise(resolve => setTimeout(resolve, 50));
+             return {result: 'success2'};
+           },
+         });
+
+         const functionCalls: FunctionCall[] = [
+           {id: randomIdForTestingOnly(), name: 'successTool1', args: {}},
+           {id: randomIdForTestingOnly(), name: 'failureTool', args: {}},
+           {id: randomIdForTestingOnly(), name: 'successTool2', args: {}},
+         ];
+
+         const toolsDict = {
+           'successTool1': successTool1,
+           'failureTool': failureTool,
+           'successTool2': successTool2,
+         };
+
+         const event = await handleFunctionCallList({
+           invocationContext,
+           functionCalls,
+           toolsDict,
+           beforeToolCallbacks: [],
+           afterToolCallbacks: [],
+         });
+
+         expect(event).not.toBeNull();
+         const parts = event!.content!.parts!;
+         expect(parts.length).toBe(3);
+
+         // Find responses by tool name
+         const response1 = parts.find(
+             p => p.functionResponse?.name === 'successTool1');
+         const response2 = parts.find(
+             p => p.functionResponse?.name === 'successTool2');
+         const failResponse =
+             parts.find(p => p.functionResponse?.name === 'failureTool');
+
+         // Verify successful tools completed
+         expect(response1?.functionResponse?.response).toEqual({
+           result: 'success1'
+         });
+         expect(response2?.functionResponse?.response).toEqual({
+           result: 'success2'
+         });
+
+         // Verify failed tool returned error
+         expect(failResponse?.functionResponse?.response).toEqual({
+           error: 'Error in tool \'failureTool\': tool failed',
+         });
+       });
+
+    it('should handle state updates from concurrent tools correctly',
+       async () => {
+         // Create tools that modify state concurrently
+         const stateTool1 = new FunctionTool({
+           name: 'stateTool1',
+           description: 'modifies state',
+           parameters: z.object({}),
+           execute: async (_args, context: ToolContext) => {
+             await new Promise(resolve => setTimeout(resolve, 50));
+             context.invocationContext.session.state.set('tool1', 'executed');
+             return {result: 'state1 set'};
+           },
+         });
+
+         const stateTool2 = new FunctionTool({
+           name: 'stateTool2',
+           description: 'modifies state',
+           parameters: z.object({}),
+           execute: async (_args, context: ToolContext) => {
+             await new Promise(resolve => setTimeout(resolve, 50));
+             context.invocationContext.session.state.set('tool2', 'executed');
+             return {result: 'state2 set'};
+           },
+         });
+
+         const functionCalls: FunctionCall[] = [
+           {id: randomIdForTestingOnly(), name: 'stateTool1', args: {}},
+           {id: randomIdForTestingOnly(), name: 'stateTool2', args: {}},
+         ];
+
+         const toolsDict = {
+           'stateTool1': stateTool1,
+           'stateTool2': stateTool2,
+         };
+
+         // Create a mock session with state
+         const session = {
+           id: 'test_session',
+           state: {
+             value: {},
+             delta: {},
+             set: function(key: string, value: unknown) {
+               this.value[key] = value;
+               this.delta[key] = value;
+             },
+             get: function(key: string) {
+               return this.value[key];
+             },
+           },
+         } as unknown as Session;
+
+         invocationContext.session = session;
+
+         const event = await handleFunctionCallList({
+           invocationContext,
+           functionCalls,
+           toolsDict,
+           beforeToolCallbacks: [],
+           afterToolCallbacks: [],
+         });
+
+         expect(event).not.toBeNull();
+
+         // Verify both state updates occurred
+         expect(session.state.get('tool1')).toBe('executed');
+         expect(session.state.get('tool2')).toBe('executed');
+       });
+
+    it('should merge multiple function response events correctly', async () => {
+      const tool1 = new FunctionTool({
+        name: 'tool1',
+        description: 'first tool',
+        parameters: z.object({}),
+        execute: async () => {
+          return {result: 'result1'};
+        },
+      });
+
+      const tool2 = new FunctionTool({
+        name: 'tool2',
+        description: 'second tool',
+        parameters: z.object({}),
+        execute: async () => {
+          return {result: 'result2'};
+        },
+      });
+
+      const functionCalls: FunctionCall[] = [
+        {id: 'call1', name: 'tool1', args: {}},
+        {id: 'call2', name: 'tool2', args: {}},
+      ];
+
+      const toolsDict = {
+        'tool1': tool1,
+        'tool2': tool2,
+      };
+
+      const event = await handleFunctionCallList({
+        invocationContext,
+        functionCalls,
+        toolsDict,
+        beforeToolCallbacks: [],
+        afterToolCallbacks: [],
+      });
+
+      expect(event).not.toBeNull();
+      const parts = event!.content!.parts!;
+      expect(parts.length).toBe(2);
+
+      // Verify both responses are present with correct IDs
+      const response1 = parts.find(p => p.functionResponse?.id === 'call1');
+      const response2 = parts.find(p => p.functionResponse?.id === 'call2');
+
+      expect(response1).toBeDefined();
+      expect(response1?.functionResponse?.response).toEqual({result: 'result1'});
+
+      expect(response2).toBeDefined();
+      expect(response2?.functionResponse?.response).toEqual({result: 'result2'});
+    });
+  });
 });
 
 describe('generateAuthEvent', () => {
