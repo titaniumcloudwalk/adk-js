@@ -1857,13 +1857,236 @@ export class LlmAgent extends BaseAgent {
   // --------------------------------------------------------------------------
   // #START LlmFlow Logic
   // --------------------------------------------------------------------------
-  private async *
-      runLiveFlow(
-          invocationContext: InvocationContext,
-          ): AsyncGenerator<Event, void, void> {
-    // TODO - b/425992518: remove dummy logic, implement this.
-    await Promise.resolve();
-    throw new Error('LlmAgent.runLiveFlow not implemented');
+
+  /**
+   * Runs the LLM flow in live mode (audio/video streaming).
+   *
+   * This method establishes a live connection to the model, sends the
+   * conversation history, and then processes incoming messages from both the
+   * user (via liveRequestQueue) and the model.
+   *
+   * @param invocationContext The invocation context for this agent.
+   * @yields Events generated during the live session.
+   */
+  private async *runLiveFlow(
+    invocationContext: InvocationContext
+  ): AsyncGenerator<Event, void, void> {
+    const llmRequest: LlmRequest = {
+      contents: [],
+      toolsDict: {},
+      liveConnectConfig: {},
+    };
+
+    const eventId = createNewEventId();
+
+    // =========================================================================
+    // Preprocess before establishing the live connection
+    // =========================================================================
+    // Runs request processors.
+    for (const processor of this.requestProcessors) {
+      for await (const event of processor.runAsync(
+        invocationContext,
+        llmRequest
+      )) {
+        yield event;
+      }
+    }
+
+    // Run pre-processors for tools.
+    for (const toolUnion of this.tools) {
+      const toolContext = new ToolContext({invocationContext});
+      const tools = await convertToolUnionToTools(
+        toolUnion,
+        new ReadonlyContext(invocationContext)
+      );
+      for (const tool of tools) {
+        await tool.processLlmRequest({toolContext, llmRequest});
+      }
+    }
+
+    if (invocationContext.endInvocation) {
+      return;
+    }
+
+    const llm = this.canonicalModel;
+    logger.debug(
+      `Establishing live connection for agent: ${invocationContext.agent.name} with llm request:`,
+      llmRequest
+    );
+
+    // =========================================================================
+    // Establish live connection and process messages
+    // =========================================================================
+    const llmConnection = await llm.connect(llmRequest);
+
+    try {
+      // Send conversation history to the model
+      if (llmRequest.contents && llmRequest.contents.length > 0) {
+        logger.debug('Sending history to model:', llmRequest.contents);
+        await llmConnection.sendHistory(llmRequest.contents);
+      }
+
+      // Start sending user input to the model in a separate task
+      const sendTask = this.sendToModel(llmConnection, invocationContext);
+
+      // Receive and process model responses
+      try {
+        for await (const event of this.receiveFromModel(
+          llmConnection,
+          eventId,
+          invocationContext,
+          llmRequest
+        )) {
+          // Empty event means the queue is closed
+          if (!event) {
+            break;
+          }
+
+          logger.debug('Receive new event:', event);
+          yield event;
+
+          // Send back the function response to models
+          if (getFunctionResponses(event).length > 0 && event.content) {
+            logger.debug(
+              'Sending back last function response event:',
+              event
+            );
+            await llmConnection.sendContent(event.content);
+          }
+
+          // Handle agent transfer
+          if (
+            event.content?.parts?.[0]?.functionResponse?.name ===
+            'transfer_to_agent'
+          ) {
+            // Agent transfer requested, need to handle in parent context
+            break;
+          }
+        }
+      } finally {
+        // Ensure the send task is properly handled
+        // In a real implementation, we'd cancel the task here
+        // For now, just let it complete or fail naturally
+      }
+    } finally {
+      // Close the live connection
+      await llmConnection.close();
+    }
+  }
+
+  /**
+   * Sends user input to the model from the live request queue.
+   *
+   * This method runs concurrently with receiveFromModel, processing incoming
+   * requests from the liveRequestQueue and forwarding them to the model.
+   *
+   * @param llmConnection The live connection to the model.
+   * @param invocationContext The invocation context.
+   */
+  private async sendToModel(
+    llmConnection: import('../models/base_llm_connection.js').BaseLlmConnection,
+    invocationContext: InvocationContext
+  ): Promise<void> {
+    const liveRequestQueue = invocationContext.liveRequestQueue;
+    if (!liveRequestQueue) {
+      logger.warn('No liveRequestQueue available for sendToModel');
+      return;
+    }
+
+    for await (const request of liveRequestQueue) {
+      if (request.close) {
+        break;
+      }
+
+      if (request.content) {
+        await llmConnection.sendContent(request.content);
+      } else if (request.blob) {
+        await llmConnection.sendRealtime(request.blob);
+      }
+    }
+  }
+
+  /**
+   * Receives responses from the model and converts them to events.
+   *
+   * @param llmConnection The live connection to the model.
+   * @param eventId The event ID for tracing.
+   * @param invocationContext The invocation context.
+   * @param llmRequest The original LLM request.
+   * @yields Events generated from model responses.
+   */
+  private async *receiveFromModel(
+    llmConnection: import('../models/base_llm_connection.js').BaseLlmConnection,
+    eventId: string,
+    invocationContext: InvocationContext,
+    llmRequest: LlmRequest
+  ): AsyncGenerator<Event, void, void> {
+    /**
+     * Get the author for the event.
+     *
+     * When the model returns transcription, the author is "user". Otherwise,
+     * the author is the agent name (not 'model').
+     */
+    function getAuthorForEvent(llmResponse: LlmResponse): string {
+      if (llmResponse?.content?.role === 'user') {
+        return 'user';
+      }
+      return invocationContext.agent.name;
+    }
+
+    // Process responses from the model
+    for await (const llmResponse of llmConnection.receive()) {
+      // Handle session resumption update
+      if (llmResponse.liveSessionResumptionUpdate) {
+        logger.info(
+          `Update session resumption handle: ${JSON.stringify(llmResponse.liveSessionResumptionUpdate)}`
+        );
+        // Store the new handle for reconnection if needed
+        // Note: liveSessionResumptionHandle would need to be added to
+        // InvocationContext
+      }
+
+      const modelResponseEvent = createEvent({
+        id: createNewEventId(),
+        invocationId: invocationContext.invocationId,
+        author: getAuthorForEvent(llmResponse),
+        branch: invocationContext.branch,
+        content: llmResponse.content,
+        partial: llmResponse.partial,
+        actions: createEventActions({
+          escalate: llmResponse.interrupted,
+        }),
+      });
+
+      // Check for function calls and process them
+      const functionCalls = getFunctionCalls(modelResponseEvent);
+      if (functionCalls.length > 0) {
+        // Yield the function call event first
+        yield modelResponseEvent;
+
+        // Process the function calls
+        const funcResponseEvent = await handleFunctionCallsAsync({
+          invocationContext,
+          functionCallEvent: modelResponseEvent,
+          toolsDict: llmRequest.toolsDict ?? {},
+          beforeToolCallbacks: this.canonicalBeforeToolCallbacks,
+          afterToolCallbacks: this.canonicalAfterToolCallbacks,
+        });
+        if (funcResponseEvent) {
+          yield funcResponseEvent;
+        }
+      } else {
+        // Yield the response event
+        yield modelResponseEvent;
+      }
+
+      // Check for turn completion or interruption
+      if (llmResponse.turnComplete || llmResponse.interrupted) {
+        if (llmResponse.interrupted) {
+          logger.info('Model response was interrupted');
+        }
+      }
+    }
   }
 
   private async *

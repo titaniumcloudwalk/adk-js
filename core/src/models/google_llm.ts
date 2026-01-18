@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {Blob, createPartFromText, FileData, FinishReason, GenerateContentResponse, GoogleGenAI, Part, SpeechConfig} from '@google/genai';
+import {Blob, createPartFromText, FileData, FinishReason, GenerateContentResponse, GoogleGenAI, LiveServerMessage, Part, Session, SpeechConfig} from '@google/genai';
 
 import {isBrowser} from '../utils/env_aware_utils.js';
 import {logger} from '../utils/logger.js';
@@ -475,15 +475,29 @@ export class Gemini extends BaseLlm {
 
     llmRequest.liveConnectConfig.tools = llmRequest.config?.tools;
 
+    // Create the connection first so we can wire up the callbacks
+    const connection = new GeminiLlmConnection();
+
     const liveSession = await this.liveApiClient.live.connect({
       model: llmRequest.model ?? this.model,
       config: llmRequest.liveConnectConfig,
       callbacks: {
-        // TODO - b/425992518: GenAI SDK inconsistent API, missing methods.
-        onmessage: () => {},
+        onmessage: (message: LiveServerMessage) => {
+          connection.onMessage(message);
+        },
+        onclose: () => {
+          connection.onClose();
+        },
+        onerror: (e: ErrorEvent) => {
+          logger.error('Live session error:', e.message);
+          connection.onClose();
+        },
       },
     });
-    return new GeminiLlmConnection(liveSession);
+
+    // Update the connection with the actual session
+    connection.setSession(liveSession);
+    return connection;
   }
 
   private preprocessRequest(llmRequest: LlmRequest): void {
