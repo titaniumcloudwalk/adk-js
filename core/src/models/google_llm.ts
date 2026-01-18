@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {Blob, createPartFromText, FileData, FinishReason, GenerateContentResponse, GoogleGenAI, Part} from '@google/genai';
+import {Blob, createPartFromText, FileData, FinishReason, GenerateContentResponse, GoogleGenAI, Part, SpeechConfig} from '@google/genai';
 
 import {isBrowser} from '../utils/env_aware_utils.js';
 import {logger} from '../utils/logger.js';
@@ -121,6 +121,30 @@ export interface GeminiParams {
    * ```
    */
   retryOptions?: HttpRetryOptions;
+
+  /**
+   * Speech configuration for the Gemini Live API.
+   *
+   * When set, this configures the speech synthesis settings for live
+   * streaming connections. This is applied as a default when connecting
+   * to the Live API and can be overridden by RunConfig.speechConfig at
+   * invocation time.
+   *
+   * @example
+   * ```typescript
+   * const gemini = new Gemini({
+   *   model: 'gemini-2.5-flash',
+   *   speechConfig: {
+   *     voiceConfig: {
+   *       prebuiltVoiceConfig: {
+   *         voiceName: 'Aoede',
+   *       },
+   *     },
+   *   },
+   * });
+   * ```
+   */
+  speechConfig?: SpeechConfig;
 }
 
 /**
@@ -134,6 +158,7 @@ export class Gemini extends BaseLlm {
   private readonly headers?: Record<string, string>;
   private readonly useInteractionsApi: boolean;
   protected readonly retryOptions?: HttpRetryOptions;
+  protected readonly speechConfig?: SpeechConfig;
 
   /**
    * @param params The parameters for creating a Gemini instance.
@@ -147,6 +172,7 @@ export class Gemini extends BaseLlm {
     headers,
     useInteractionsApi,
     retryOptions,
+    speechConfig,
   }: GeminiParams) {
     if (!model) {
       model = 'gemini-2.5-flash';
@@ -160,6 +186,7 @@ export class Gemini extends BaseLlm {
     this.headers = headers;
     this.useInteractionsApi = useInteractionsApi || false;
     this.retryOptions = retryOptions;
+    this.speechConfig = speechConfig;
 
     const canReadEnv = typeof process === 'object';
 
@@ -438,6 +465,12 @@ export class Gemini extends BaseLlm {
         parts:
             [createPartFromText(llmRequest.config.systemInstruction as string)],
       };
+    }
+
+    // Apply model-level speechConfig as default if not already set
+    // RunConfig.speechConfig (applied in BasicLlmRequestProcessor) takes precedence
+    if (this.speechConfig && !llmRequest.liveConnectConfig.speechConfig) {
+      llmRequest.liveConnectConfig.speechConfig = this.speechConfig;
     }
 
     llmRequest.liveConnectConfig.tools = llmRequest.config?.tools;

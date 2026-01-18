@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {Gemini, GeminiParams, HttpRetryOptions} from '@google/adk';
+import {SpeechConfig} from '@google/genai';
+
+import {Gemini, GeminiParams, HttpRetryOptions, LlmRequest} from '@google/adk';
 
 import {version} from '../../src/version.js';
 
@@ -17,6 +19,9 @@ class TestGemini extends Gemini {
   }
   getRetryOptions(): HttpRetryOptions | undefined {
     return this.retryOptions;
+  }
+  getSpeechConfig(): SpeechConfig | undefined {
+    return this.speechConfig;
   }
 }
 
@@ -92,6 +97,65 @@ describe('GoogleLlm', () => {
         maxDelay: 60000,
         backoffMultiplier: 1.5,
       });
+    });
+  });
+
+  describe('Speech Config', () => {
+    it('should accept speechConfig parameter', () => {
+      const speechConfig: SpeechConfig = {
+        voiceConfig: {
+          prebuiltVoiceConfig: {
+            voiceName: 'Aoede',
+          },
+        },
+      };
+      const llm = new TestGemini({apiKey: 'test-key', speechConfig});
+      expect(llm.getSpeechConfig()).toEqual(speechConfig);
+    });
+
+    it('should have undefined speechConfig when not provided', () => {
+      const llm = new TestGemini({apiKey: 'test-key'});
+      expect(llm.getSpeechConfig()).toBeUndefined();
+    });
+
+    it('should accept speechConfig with voiceConfig.prebuiltVoiceConfig', () => {
+      const speechConfig: SpeechConfig = {
+        voiceConfig: {
+          prebuiltVoiceConfig: {
+            voiceName: 'Charon',
+          },
+        },
+      };
+      const llm = new TestGemini({apiKey: 'test-key', speechConfig});
+      expect(llm.getSpeechConfig()?.voiceConfig?.prebuiltVoiceConfig?.voiceName).toBe('Charon');
+    });
+
+    it('should accept speechConfig with languageCode', () => {
+      const speechConfig: SpeechConfig = {
+        languageCode: 'en-US',
+      };
+      const llm = new TestGemini({apiKey: 'test-key', speechConfig});
+      expect(llm.getSpeechConfig()?.languageCode).toBe('en-US');
+    });
+
+    it('should accept combined speechConfig and retryOptions', () => {
+      const speechConfig: SpeechConfig = {
+        voiceConfig: {
+          prebuiltVoiceConfig: {
+            voiceName: 'Fenrir',
+          },
+        },
+      };
+      const retryOptions: HttpRetryOptions = {
+        attempts: 2,
+      };
+      const llm = new TestGemini({
+        apiKey: 'test-key',
+        speechConfig,
+        retryOptions,
+      });
+      expect(llm.getSpeechConfig()).toEqual(speechConfig);
+      expect(llm.getRetryOptions()).toEqual(retryOptions);
     });
   });
 });
