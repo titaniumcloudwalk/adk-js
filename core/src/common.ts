@@ -167,7 +167,15 @@ export {AgentTool} from './tools/agent_tool.js';
 export {BaseTool} from './tools/base_tool.js';
 export {BaseToolset} from './tools/base_toolset.js';
 export {FunctionTool} from './tools/function_tool.js';
-export {GOOGLE_SEARCH} from './tools/google_search_tool.js';
+export {
+  createGoogleSearchAgent,
+  GoogleSearchAgentTool,
+} from './tools/google_search_agent_tool.js';
+export {
+  GOOGLE_SEARCH,
+  GoogleSearchTool,
+} from './tools/google_search_tool.js';
+export type {GoogleSearchToolConfig} from './tools/google_search_tool.js';
 export {LongRunningFunctionTool} from './tools/long_running_tool.js';
 export {LoadMemoryTool, loadMemoryTool} from './tools/load_memory_tool.js';
 export type {LoadMemoryResponse} from './tools/load_memory_tool.js';

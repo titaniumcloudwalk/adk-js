@@ -12,15 +12,53 @@ import {BaseTool, RunAsyncToolRequest, ToolProcessLlmRequest} from './base_tool.
 import {ToolContext} from './tool_context.js';
 
 /**
+ * Configuration options for GoogleSearchTool.
+ */
+export interface GoogleSearchToolConfig {
+  /**
+   * Whether to bypass the multi-tools limitation, allowing the tool to be used
+   * with other tools in the same agent.
+   *
+   * When set to true, the tool will be automatically wrapped in a sub-agent
+   * (GoogleSearchAgentTool) when used alongside other tools. This is a
+   * workaround for Gemini's limitation that built-in tools cannot be used
+   * together with other tools.
+   *
+   * @default false
+   */
+  bypassMultiToolsLimit?: boolean;
+}
+
+/**
  * A built-in tool that is automatically invoked by Gemini 2 models to retrieve
  * search results from Google Search.
  *
  * This tool operates internally within the model and does not require or
  * perform local code execution.
+ *
+ * @example
+ * ```typescript
+ * // Basic usage (cannot be used with other tools in Gemini 1.x)
+ * const searchTool = new GoogleSearchTool();
+ *
+ * // With bypass flag (can be used with other tools)
+ * const searchTool = new GoogleSearchTool({ bypassMultiToolsLimit: true });
+ * ```
  */
-class GoogleSearchTool extends BaseTool {
-  constructor() {
+export class GoogleSearchTool extends BaseTool {
+  /**
+   * Whether to bypass the multi-tools limitation.
+   */
+  readonly bypassMultiToolsLimit: boolean;
+
+  /**
+   * Creates a new GoogleSearchTool instance.
+   *
+   * @param config - Optional configuration options
+   */
+  constructor(config?: GoogleSearchToolConfig) {
     super({name: 'google_search', description: 'Google Search Tool'});
+    this.bypassMultiToolsLimit = config?.bypassMultiToolsLimit ?? false;
   }
 
   runAsync(request: RunAsyncToolRequest): Promise<unknown> {

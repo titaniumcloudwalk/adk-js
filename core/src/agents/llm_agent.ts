@@ -24,6 +24,8 @@ import {State} from '../sessions/state.js';
 import {BaseTool} from '../tools/base_tool.js';
 import {BaseToolset} from '../tools/base_toolset.js';
 import {FunctionTool} from '../tools/function_tool.js';
+import {createGoogleSearchAgent, GoogleSearchAgentTool} from '../tools/google_search_agent_tool.js';
+import {GoogleSearchTool} from '../tools/google_search_tool.js';
 import {ToolConfirmation} from '../tools/tool_confirmation.js';
 import {ToolContext} from '../tools/tool_context.js';
 import {base64Decode} from '../utils/env_aware_utils.js';
@@ -1674,6 +1676,11 @@ export class LlmAgent extends BaseAgent {
   /**
    * The resolved self.tools field as a list of BaseTool based on the context.
    *
+   * This method also handles the tool limitations workaround: when there are
+   * multiple tools and a GoogleSearchTool has bypassMultiToolsLimit=true,
+   * it wraps the GoogleSearchTool in a GoogleSearchAgentTool to avoid
+   * Gemini's limitation that built-in tools cannot be used with other tools.
+   *
    * This method is only for use by Agent Development Kit.
    */
   async canonicalTools(context?: ReadonlyContext): Promise<BaseTool[]> {
@@ -1682,6 +1689,27 @@ export class LlmAgent extends BaseAgent {
       const tools = await convertToolUnionToTools(toolUnion, context);
       resolvedTools.push(...tools);
     }
+
+    // Apply tool limitations workaround for multiple tools
+    const hasMultipleTools = resolvedTools.length > 1;
+
+    if (hasMultipleTools) {
+      const model = this.canonicalModel;
+      const processedTools: BaseTool[] = [];
+
+      for (const tool of resolvedTools) {
+        // Wrap GoogleSearchTool with GoogleSearchAgentTool if bypass is enabled
+        if (tool instanceof GoogleSearchTool && tool.bypassMultiToolsLimit) {
+          const searchAgent = createGoogleSearchAgent(model);
+          processedTools.push(new GoogleSearchAgentTool({agent: searchAgent}));
+        } else {
+          processedTools.push(tool);
+        }
+      }
+
+      return processedTools;
+    }
+
     return resolvedTools;
   }
 
