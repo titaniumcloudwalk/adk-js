@@ -11,9 +11,20 @@ import {Content} from '@google/genai';
  */
 export interface MemoryEntry {
   /**
-   * The content of the memory entry.
+   * The main content of the memory entry.
    */
   content: Content;
+
+  /**
+   * Optional custom metadata associated with the memory.
+   * Can be used to store additional information about the memory entry.
+   */
+  customMetadata?: Record<string, unknown>;
+
+  /**
+   * The unique identifier of the memory.
+   */
+  id?: string;
 
   /**
    * The author of the memory.
