@@ -751,6 +751,253 @@ function logError(message: string): void {
 }
 
 /**
+ * Options for deploying to GKE.
+ */
+export interface DeployToGkeOptions extends CreateDockerFileContentOptions {
+  /** Path to agent directory containing agent source code */
+  agentPath: string;
+  /** The name of the GKE cluster */
+  clusterName: string;
+  /** The service name in GKE */
+  serviceName: string;
+  /** Temp folder for staging files */
+  tempFolder: string;
+  /** ADK version to use */
+  adkVersion: string;
+}
+
+/**
+ * Generates Kubernetes deployment manifest (Deployment + Service).
+ */
+function generateKubernetesManifest(options: {
+  serviceName: string;
+  imageName: string;
+  port: number;
+  adkVersion: string;
+}): string {
+  const {serviceName, imageName, port, adkVersion} = options;
+
+  return `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${serviceName}
+  labels:
+    app.kubernetes.io/name: adk-agent
+    app.kubernetes.io/version: ${adkVersion}
+    app.kubernetes.io/instance: ${serviceName}
+    app.kubernetes.io/managed-by: adk-cli
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${serviceName}
+  template:
+    metadata:
+      labels:
+        app: ${serviceName}
+        app.kubernetes.io/name: adk-agent
+        app.kubernetes.io/version: ${adkVersion}
+        app.kubernetes.io/instance: ${serviceName}
+        app.kubernetes.io/managed-by: adk-cli
+    spec:
+      containers:
+      - name: ${serviceName}
+        image: ${imageName}
+        ports:
+        - containerPort: ${port}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${serviceName}
+spec:
+  type: LoadBalancer
+  selector:
+    app: ${serviceName}
+  ports:
+  - port: 80
+    targetPort: ${port}
+`;
+}
+
+/**
+ * Deploys an agent to Google Kubernetes Engine (GKE).
+ *
+ * This function:
+ * 1. Prepares the build environment and copies agent files
+ * 2. Generates a Dockerfile for the agent
+ * 3. Builds and pushes a container image using Cloud Build
+ * 4. Generates Kubernetes Deployment and Service manifests
+ * 5. Gets GKE cluster credentials
+ * 6. Applies the manifests to the cluster using kubectl
+ *
+ * @param options Deployment options
+ */
+export async function deployToGke(options: DeployToGkeOptions): Promise<void> {
+  console.log('\n\x1b[36m\x1b[1m🚀 Starting ADK Agent Deployment to GKE...\x1b[0m');
+  console.log('--------------------------------------------------');
+
+  // Resolve project
+  const project =
+      options.project || await resolveDefaultFromGcloudConfig('project');
+  if (!project || project === '(unset)') {
+    throw new Error(
+        'Project is not specified and default value for "project" is not set in gcloud config. Please specify project with --project option or set default value running "gcloud config set project YOUR_PROJECT".');
+  }
+  if (!options.project) {
+    options.project = project;
+  }
+
+  // Resolve region
+  const region =
+      options.region || await resolveDefaultFromGcloudConfig('compute/region');
+  if (!region || region === '(unset)') {
+    throw new Error(
+        'Region is not specified and default value for "compute/region" is not set in gcloud config. Please specify region with --region option or set default value running "gcloud config set compute/region YOUR_REGION".');
+  }
+  if (!options.region) {
+    options.region = region;
+  }
+
+  console.log(`  Project:         ${project}`);
+  console.log(`  Region:          ${region}`);
+  console.log(`  Cluster:         ${options.clusterName}`);
+  console.log('--------------------------------------------------\n');
+
+  // Request to bundle any js or ts file into a single cjs file
+  const agentLoader =
+      new AgentLoader(options.agentPath, {bundle: AgentFileBundleMode.ANY});
+
+  const isFileProvided = await isFile(options.agentPath);
+  const agentDir =
+      isFileProvided ? path.dirname(options.agentPath) : options.agentPath;
+  const appName = options.appName || isFileProvided ?
+      path.parse(options.agentPath).name :
+      path.basename(options.agentPath);
+
+  // Clean up existing temp folder if exists
+  if (await isFolderExists(options.tempFolder)) {
+    console.log('  - Removing existing temporary directory...');
+    await fs.rm(options.tempFolder, {recursive: true, force: true});
+  }
+
+  try {
+    // STEP 1: Prepare build environment
+    console.log('\x1b[1mSTEP 1: Preparing build environment...\x1b[0m');
+    console.log(`  - Using temporary directory: ${options.tempFolder}`);
+
+    console.log('  - Copying agent source code...');
+    await copyAgentFiles(
+        agentLoader, path.join(options.tempFolder, 'agents', appName));
+
+    console.log('  - Creating package.json...');
+    await createPackageJson(agentDir, options.tempFolder);
+    logSuccess('Environment prepared.');
+
+    // STEP 2: Generate deployment files
+    console.log('\n\x1b[1mSTEP 2: Generating deployment files...\x1b[0m');
+    console.log('  - Creating Dockerfile...');
+    await createDockerFile(options.tempFolder, {
+      appName,
+      project: options.project,
+      region: options.region,
+      port: options.port,
+      withUi: options.withUi,
+      logLevel: options.logLevel,
+      allowOrigins: options.allowOrigins,
+      traceToCloud: options.traceToCloud,
+      artifactServiceUri: options.artifactServiceUri,
+    });
+    logSuccess(`Dockerfile generated: ${path.join(options.tempFolder, 'Dockerfile')}`);
+
+    // STEP 3: Build and push container image
+    console.log('\n\x1b[1mSTEP 3: Building container image with Cloud Build...\x1b[0m');
+    console.log('  (This may take a few minutes. Raw logs from gcloud will be shown below.)');
+
+    const imageName = `gcr.io/${project}/${options.serviceName}`;
+    const buildProcess = spawn('gcloud', [
+      'builds',
+      'submit',
+      '--tag',
+      imageName,
+      '--verbosity',
+      options.logLevel.toLowerCase(),
+      options.tempFolder,
+    ], {stdio: 'inherit'});
+
+    await new Promise<void>((resolve, reject) => {
+      buildProcess.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`Cloud Build failed with exit code ${code}`));
+        }
+      });
+      buildProcess.on('error', reject);
+    });
+    logSuccess('Container image built and pushed successfully.');
+
+    // Generate Kubernetes deployment manifest
+    console.log('  - Creating Kubernetes deployment.yaml...');
+    const deploymentYaml = generateKubernetesManifest({
+      serviceName: options.serviceName,
+      imageName,
+      port: options.port,
+      adkVersion: options.adkVersion,
+    });
+    const deploymentYamlPath = path.join(options.tempFolder, 'deployment.yaml');
+    await saveToFile(deploymentYamlPath, deploymentYaml);
+    logSuccess(`Kubernetes deployment manifest generated: ${deploymentYamlPath}`);
+
+    // STEP 4: Apply deployment to GKE cluster
+    console.log('\n\x1b[1mSTEP 4: Applying deployment to GKE cluster...\x1b[0m');
+    console.log('  - Getting cluster credentials...');
+
+    const credentialsProcess = spawn('gcloud', [
+      'container',
+      'clusters',
+      'get-credentials',
+      options.clusterName,
+      '--region',
+      region,
+      '--project',
+      project,
+    ], {stdio: 'inherit'});
+
+    await new Promise<void>((resolve, reject) => {
+      credentialsProcess.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`Failed to get cluster credentials. Exit code: ${code}`));
+        }
+      });
+      credentialsProcess.on('error', reject);
+    });
+
+    console.log('  - Applying Kubernetes manifest...');
+    const {stdout: kubectlOutput} = await execAsync(`kubectl apply -f ${options.tempFolder}`);
+
+    console.log('\x1b[32m  - The following resources were applied to the cluster:\x1b[0m');
+    for (const line of kubectlOutput.trim().split('\n')) {
+      console.log(`    - ${line}`);
+    }
+
+  } catch (e: unknown) {
+    logError(`Failed to deploy to GKE: ${(e as Error).message}`);
+    throw e;
+  } finally {
+    // STEP 5: Clean up
+    console.log('\n\x1b[1mSTEP 5: Cleaning up...\x1b[0m');
+    console.log(`  - Removing temporary directory: ${options.tempFolder}`);
+    await fs.rm(options.tempFolder, {recursive: true, force: true});
+    await agentLoader.disposeAll();
+  }
+
+  console.log('\n\x1b[36m\x1b[1m🎉 Deployment to GKE finished successfully!\x1b[0m');
+}
+
+/**
  * Deploys an agent to Vertex AI Agent Engine.
  *
  * The agent folder should contain:

@@ -12,7 +12,7 @@ import {Command, Argument, Option} from 'commander';
 import {LogLevel, setLogLevel, BaseArtifactService, GcsArtifactService} from '@google/adk';
 import {AdkWebServer} from '../server/adk_web_server.js';
 import {runAgent} from './cli_run.js';
-import {deployToCloudRun, deployToAgentEngine} from './cli_deploy.js';
+import {deployToCloudRun, deployToAgentEngine, deployToGke} from './cli_deploy.js';
 import {getTempDir} from '../utils/file_utils.js';
 import { createAgent } from './cli_create.js';
 
@@ -332,6 +332,63 @@ DEPLOY_COMMAND.command('agent_engine')
         tempFolder: options['temp_folder'],
         envFile: options['env_file'],
         agentEngineConfigFile: options['agent_engine_config_file'],
+        traceToCloud: !!options['trace_to_cloud'],
+      });
+    });
+
+DEPLOY_COMMAND.command('gke')
+    .description('Deploy agent to Google Kubernetes Engine (GKE)')
+    .addArgument(AGENT_DIR_ARGUMENT)
+    .addOption(PORT_OPTION)
+    .option(
+        '--project [string]',
+        'Optional. Google Cloud project ID. If not set, uses default from gcloud config')
+    .option(
+        '--region [string]',
+        'Optional. Google Cloud region. If not set, uses default from gcloud config')
+    .requiredOption(
+        '--cluster_name <string>',
+        'Required. The name of the GKE cluster to deploy to')
+    .option(
+        '--service_name [string]',
+        'Optional. The service name in GKE. Default: "adk-default-service-name"',
+        'adk-default-service-name')
+    .option(
+        '--temp_folder [string]',
+        'Optional. Temp folder for the generated GKE deployment files',
+        getTempDir('gke_deploy_src'))
+    .option(
+        '--adk_version [string]',
+        'Optional. ADK version to use. Default: "latest"',
+        'latest')
+    .option(
+        '--with_ui [boolean]',
+        'Optional. Deploy ADK Web UI if set. (default: deploy ADK API server only)',
+        false)
+    .option(
+        '--trace_to_cloud [boolean]',
+        'Optional. Whether to enable cloud trace for telemetry.',
+        false)
+    .addOption(ORIGINS_OPTION)
+    .addOption(VERBOSE_OPTION)
+    .addOption(LOG_LEVEL_OPTION)
+    .addOption(ARTIFACT_SERVICE_URI_OPTION)
+    .action(async (agentPath: string, options: Record<string, string>) => {
+      setLogLevel(getLogLevelFromOptions(options));
+
+      await deployToGke({
+        agentPath: getAbsolutePath(agentPath),
+        project: options['project'],
+        region: options['region'],
+        clusterName: options['cluster_name'],
+        serviceName: options['service_name'],
+        tempFolder: options['temp_folder'],
+        port: parseInt(options['port'], 10),
+        withUi: !!options['with_ui'],
+        logLevel: options['log_level'],
+        adkVersion: options['adk_version'],
+        allowOrigins: options['allow_origins'],
+        artifactServiceUri: options['artifact_service_uri'],
         traceToCloud: !!options['trace_to_cloud'],
       });
     });
