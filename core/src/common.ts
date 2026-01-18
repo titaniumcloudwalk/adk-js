@@ -322,3 +322,42 @@ export type {
   A2aAgentExecutorConfig,
   RunnerFactory,
 } from './a2a/index.js';
+
+// Agent Config (YAML-based configuration)
+export {
+  // Config loading utilities
+  fromConfig,
+  loadConfigFromPath,
+  resolveAgentClass,
+  resolveFullyQualifiedName,
+  resolveCodeReference,
+  resolveCallbacks,
+  resolveAgentReference,
+  resolveAgentReferences,
+  resolveTools,
+  AgentConfigError,
+  clearModuleCache,
+  // Config schemas and types
+  ADK_AGENT_CLASSES,
+  AGENT_CONFIG_SCHEMAS,
+  getAgentClassFromConfig,
+  validateAgentConfig,
+  // Utility functions
+  argsToRecord,
+  isClass,
+  isPlainObject,
+} from './agents/config/index.js';
+export type {
+  // Common config types
+  ArgumentConfig,
+  CodeConfig,
+  AgentRefConfig,
+  ToolConfig,
+  // Agent config YAML types
+  BaseAgentConfigYaml,
+  LlmAgentConfigYaml,
+  LoopAgentConfigYaml,
+  ParallelAgentConfigYaml,
+  SequentialAgentConfigYaml,
+  AgentConfigYaml,
+} from './agents/config/index.js';
