@@ -15,6 +15,10 @@ import {runAgent} from './cli_run.js';
 import {deployToCloudRun, deployToAgentEngine, deployToGke} from './cli_deploy.js';
 import {getTempDir} from '../utils/file_utils.js';
 import { createAgent } from './cli_create.js';
+import {
+  createSessionServiceFromOptions,
+  createArtifactServiceFromOptions,
+} from './service_factory.js';
 
 dotenv.config();
 
@@ -76,7 +80,17 @@ const LOG_LEVEL_OPTION =
     new Option('--log_level <string>', 'Optional. The log level of the server')
         .default('info');
 const ARTIFACT_SERVICE_URI_OPTION = new Option(
-    '--artifact_service_uri <string>, Optional. The URI of the artifact service, supported URIs: gs://<bucket name> for GCS artifact service.')
+    '--artifact_service_uri <string>',
+    'Optional. The URI of the artifact service. Supported URIs: gs://<bucket> for GCS, memory:// for in-memory.');
+
+const SESSION_SERVICE_URI_OPTION = new Option(
+    '--session_service_uri <string>',
+    'Optional. The URI of the session service. Supported URIs: sqlite:///<path>, agentengine://<resource>, memory:// for in-memory.');
+
+const USE_LOCAL_STORAGE_OPTION = new Option(
+    '--use_local_storage [boolean]',
+    'Optional. Whether to use local .adk storage for sessions/artifacts when no URI is provided (default: true).')
+    .default(true);
 
 const program = new Command('ADK CLI');
 
@@ -188,8 +202,26 @@ program.command('run')
     .addOption(VERBOSE_OPTION)
     .addOption(LOG_LEVEL_OPTION)
     .addOption(ARTIFACT_SERVICE_URI_OPTION)
-    .action((agentPath: string, options: Record<string, string>) => {
+    .addOption(SESSION_SERVICE_URI_OPTION)
+    .addOption(USE_LOCAL_STORAGE_OPTION)
+    .action(async (agentPath: string, options: Record<string, string>) => {
       setLogLevel(getLogLevelFromOptions(options));
+
+      const baseDir = path.dirname(getAbsolutePath(agentPath));
+      const useLocalStorage = String(options['use_local_storage']) !== 'false';
+
+      // Create services from options (supports URI-based configuration)
+      const sessionService = await createSessionServiceFromOptions({
+        baseDir,
+        sessionServiceUri: options['session_service_uri'],
+        useLocalStorage,
+      });
+
+      const artifactService = await createArtifactServiceFromOptions({
+        baseDir,
+        artifactServiceUri: options['artifact_service_uri'],
+        useLocalStorage,
+      });
 
       runAgent({
         agentPath,
@@ -197,9 +229,8 @@ program.command('run')
         savedSessionFile: options['resume'],
         saveSession: !!options['save_session'],
         sessionId: options['session_id'],
-        artifactService: options['artifact_service_uri'] ?
-            getArtifactServiceFromUri(options['artifact_service_uri']) :
-            undefined,
+        artifactService,
+        sessionService,
       });
     });
 
