@@ -64,7 +64,16 @@ export class MCPSessionManager {
     this.connectionParams = connectionParams;
   }
 
-  async createSession(): Promise<Client> {
+  /**
+   * Creates a new MCP session with optional additional headers.
+   *
+   * @param additionalHeaders Optional headers to merge with static headers
+   *     from connection params. These headers take precedence over static
+   *     headers when there are conflicts.
+   * @returns A Promise that resolves to the MCP Client instance.
+   */
+  async createSession(
+      additionalHeaders?: Record<string, string>): Promise<Client> {
     const client = new Client({name: 'MCPClient', version: '1.0.0'});
 
     switch (this.connectionParams.type) {
@@ -73,9 +82,18 @@ export class MCPSessionManager {
             new StdioClientTransport(this.connectionParams.serverParams));
         break;
       case 'StreamableHTTPConnectionParams':
-        const transportOptions = this.connectionParams.header ? {
+        // Merge static headers with additional headers
+        const staticHeaders =
+            this.connectionParams.header as Record<string, string> | undefined;
+        const mergedHeaders = {
+          ...(staticHeaders || {}),
+          ...(additionalHeaders || {}),
+        };
+
+        const hasHeaders = Object.keys(mergedHeaders).length > 0;
+        const transportOptions = hasHeaders ? {
           requestInit: {
-            headers: this.connectionParams.header as Record<string, string>
+            headers: mergedHeaders
           }
         } : undefined;
         await client.connect(new StreamableHTTPClientTransport(

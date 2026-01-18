@@ -15,6 +15,15 @@ import {MCPConnectionParams, MCPSessionManager} from './mcp_session_manager.js';
 import {MCPTool} from './mcp_tool.js';
 
 /**
+ * Function type for providing dynamic headers for MCP server calls.
+ * The function receives the current readonly context (if available) and should
+ * return a dictionary of headers to be merged with any existing static headers.
+ * Can be synchronous or asynchronous.
+ */
+export type HeaderProvider =
+    (context?: ReadonlyContext) => Record<string, string> | Promise<Record<string, string>>;
+
+/**
  * A toolset that dynamically discovers and provides tools from a Model Context
  * Protocol (MCP) server.
  *
@@ -40,16 +49,42 @@ import {MCPTool} from './mcp_tool.js';
  */
 export class MCPToolset extends BaseToolset {
   private readonly mcpSessionManager: MCPSessionManager;
+  private readonly connectionParams: MCPConnectionParams;
+  private readonly headerProvider?: HeaderProvider;
 
+  /**
+   * Creates a new MCPToolset instance.
+   *
+   * @param connectionParams Connection parameters for the MCP server.
+   * @param toolFilter Optional filter to select specific tools. Can be either
+   *     a list of tool names to include or a ToolPredicate function for custom
+   *     filtering logic.
+   * @param toolNamePrefix Optional prefix to prepend to the names of all tools
+   *     returned by this toolset.
+   * @param headerProvider Optional function to provide additional headers for
+   *     MCP server calls. The function receives the current context and returns
+   *     headers to be merged with any existing static headers.
+   */
   constructor(
       connectionParams: MCPConnectionParams,
-      toolFilter: ToolPredicate|string[] = []) {
-    super(toolFilter);
+      toolFilter: ToolPredicate|string[] = [],
+      toolNamePrefix?: string,
+      headerProvider?: HeaderProvider) {
+    super(toolFilter, toolNamePrefix);
+    this.connectionParams = connectionParams;
+    this.headerProvider = headerProvider;
     this.mcpSessionManager = new MCPSessionManager(connectionParams);
   }
 
   async getTools(context?: ReadonlyContext): Promise<BaseTool[]> {
-    const session = await this.mcpSessionManager.createSession();
+    // Get headers from the header provider if available
+    let providedHeaders: Record<string, string> = {};
+    if (this.headerProvider) {
+      const result = this.headerProvider(context);
+      providedHeaders = result instanceof Promise ? await result : result;
+    }
+
+    const session = await this.mcpSessionManager.createSession(providedHeaders);
 
     const listResult = await session.listTools() as ListToolsResult;
     logger.debug(`number of tools: ${listResult.tools.length}`)
@@ -57,9 +92,15 @@ export class MCPToolset extends BaseToolset {
       logger.debug(`tool: ${tool.name}`)
     }
 
-    // TODO: respect context (e.g. tool filter)
-    return listResult.tools.map(
-        (tool) => new MCPTool(tool, this.mcpSessionManager));
+    // Filter tools based on tool filter
+    const tools: BaseTool[] = [];
+    for (const mcpTool of listResult.tools) {
+      const tool = new MCPTool(mcpTool, this.mcpSessionManager);
+      if (!context || this.isToolSelected(tool, context)) {
+        tools.push(tool);
+      }
+    }
+    return tools;
   }
 
   async close(): Promise<void> {}

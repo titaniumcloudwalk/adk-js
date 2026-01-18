@@ -100,16 +100,13 @@ export interface OpenAPIToolsetParams {
  */
 export class OpenAPIToolset extends BaseToolset {
   private readonly tools: RestApiTool[];
-  private readonly toolNamePrefix?: string;
   private sslVerify?: boolean;
   private readonly headerProvider?: (
     context: ReadonlyContext
   ) => Record<string, string>;
 
   constructor(params: OpenAPIToolsetParams) {
-    super(params.toolFilter || []);
-
-    this.toolNamePrefix = params.toolNamePrefix;
+    super(params.toolFilter || [], params.toolNamePrefix);
     this.sslVerify = params.sslVerify;
     this.headerProvider = params.headerProvider;
 
