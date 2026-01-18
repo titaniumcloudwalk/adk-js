@@ -362,4 +362,252 @@ describe('cli_deploy', () => {
       expect(requiredMethods).toContain('streaming_agent_run_with_events');
     });
   });
+
+  describe('Cloud Run Dockerfile generation', () => {
+    // Helper to generate Dockerfile content matching createDockerFileContent logic
+    function generateDockerfileContent(options: {
+      appName: string;
+      project: string;
+      region?: string;
+      port: number;
+      withUi: boolean;
+      logLevel?: string;
+      allowOrigins?: string;
+      artifactServiceUri?: string;
+      traceToCloud?: boolean;
+    }): string {
+      const adkCommand = options.withUi ? 'web' : 'api_server';
+      const adkServerOptions = [
+        `--port=${options.port}`,
+        '--host=0.0.0.0',
+      ];
+
+      if (options.logLevel) {
+        adkServerOptions.push(`--log_level=${options.logLevel}`);
+      }
+
+      if (options.allowOrigins) {
+        adkServerOptions.push(`--allow_origins=${options.allowOrigins}`);
+      }
+
+      if (options.artifactServiceUri) {
+        adkServerOptions.push(
+            `--artifact_service_uri=${options.artifactServiceUri}`);
+      }
+
+      if (options.traceToCloud) {
+        adkServerOptions.push('--trace_to_cloud');
+      }
+
+      return `
+FROM node:lts-alpine
+WORKDIR /app
+
+# Create a non-root user
+RUN adduser --disabled-password --gecos "" myuser
+
+# Switch to the non-root user
+USER myuser
+
+# Set up environment variables - Start
+ENV PATH="/home/myuser/.local/bin:$PATH"
+ENV GOOGLE_GENAI_USE_VERTEXAI=1
+ENV GOOGLE_CLOUD_PROJECT=${options.project}
+ENV GOOGLE_CLOUD_LOCATION=${options.region}
+# Set up environment variables - End
+
+# Copy application files
+COPY --chown=myuser:myuser "agents/${options.appName}/" "/app/agents/${
+          options.appName}/"
+COPY --chown=myuser:myuser "package.json" "/app/package.json"
+COPY --chown=myuser:myuser "package-lock.json" "/app/package-lock.json"
+COPY --chown=myuser:myuser "node_modules" "/app/node_modules"
+# Copy application files
+
+# Install Agent Deps - Start
+RUN npm install @google/adk-devtools@latest
+RUN npm install --production
+# Install Agent Deps - End
+
+EXPOSE ${options.port}
+
+CMD npx adk ${adkCommand} /app/agents/${options.appName} ${
+          adkServerOptions.join(' ')}`;
+    }
+
+    describe('--trace_to_cloud flag', () => {
+      it('should include --trace_to_cloud in CMD when enabled', () => {
+        const dockerfile = generateDockerfileContent({
+          appName: 'my-agent',
+          project: 'my-project',
+          region: 'us-central1',
+          port: 8080,
+          withUi: false,
+          traceToCloud: true,
+        });
+
+        expect(dockerfile).toContain('--trace_to_cloud');
+        expect(dockerfile).toContain('npx adk api_server');
+      });
+
+      it('should NOT include --trace_to_cloud in CMD when disabled', () => {
+        const dockerfile = generateDockerfileContent({
+          appName: 'my-agent',
+          project: 'my-project',
+          region: 'us-central1',
+          port: 8080,
+          withUi: false,
+          traceToCloud: false,
+        });
+
+        expect(dockerfile).not.toContain('--trace_to_cloud');
+      });
+
+      it('should NOT include --trace_to_cloud in CMD when undefined', () => {
+        const dockerfile = generateDockerfileContent({
+          appName: 'my-agent',
+          project: 'my-project',
+          region: 'us-central1',
+          port: 8080,
+          withUi: false,
+          // traceToCloud is undefined
+        });
+
+        expect(dockerfile).not.toContain('--trace_to_cloud');
+      });
+
+      it('should include --trace_to_cloud with web UI mode', () => {
+        const dockerfile = generateDockerfileContent({
+          appName: 'my-agent',
+          project: 'my-project',
+          region: 'us-central1',
+          port: 8080,
+          withUi: true,
+          traceToCloud: true,
+        });
+
+        expect(dockerfile).toContain('--trace_to_cloud');
+        expect(dockerfile).toContain('npx adk web');
+      });
+
+      it('should combine --trace_to_cloud with other options', () => {
+        const dockerfile = generateDockerfileContent({
+          appName: 'my-agent',
+          project: 'my-project',
+          region: 'us-central1',
+          port: 8080,
+          withUi: false,
+          logLevel: 'DEBUG',
+          allowOrigins: 'https://example.com',
+          artifactServiceUri: 'gs://my-bucket/artifacts',
+          traceToCloud: true,
+        });
+
+        expect(dockerfile).toContain('--trace_to_cloud');
+        expect(dockerfile).toContain('--log_level=DEBUG');
+        expect(dockerfile).toContain('--allow_origins=https://example.com');
+        expect(dockerfile).toContain('--artifact_service_uri=gs://my-bucket/artifacts');
+      });
+    });
+
+    describe('basic Dockerfile structure', () => {
+      it('should use api_server command when withUi is false', () => {
+        const dockerfile = generateDockerfileContent({
+          appName: 'my-agent',
+          project: 'my-project',
+          port: 8080,
+          withUi: false,
+        });
+
+        expect(dockerfile).toContain('npx adk api_server');
+        expect(dockerfile).not.toContain('npx adk web');
+      });
+
+      it('should use web command when withUi is true', () => {
+        const dockerfile = generateDockerfileContent({
+          appName: 'my-agent',
+          project: 'my-project',
+          port: 8080,
+          withUi: true,
+        });
+
+        expect(dockerfile).toContain('npx adk web');
+        expect(dockerfile).not.toContain('npx adk api_server');
+      });
+
+      it('should set correct environment variables', () => {
+        const dockerfile = generateDockerfileContent({
+          appName: 'my-agent',
+          project: 'test-project',
+          region: 'europe-west1',
+          port: 8080,
+          withUi: false,
+        });
+
+        expect(dockerfile).toContain('ENV GOOGLE_CLOUD_PROJECT=test-project');
+        expect(dockerfile).toContain('ENV GOOGLE_CLOUD_LOCATION=europe-west1');
+        expect(dockerfile).toContain('ENV GOOGLE_GENAI_USE_VERTEXAI=1');
+      });
+
+      it('should include port configuration', () => {
+        const dockerfile = generateDockerfileContent({
+          appName: 'my-agent',
+          project: 'my-project',
+          port: 3000,
+          withUi: false,
+        });
+
+        expect(dockerfile).toContain('--port=3000');
+        expect(dockerfile).toContain('EXPOSE 3000');
+      });
+
+      it('should include log level when provided', () => {
+        const dockerfile = generateDockerfileContent({
+          appName: 'my-agent',
+          project: 'my-project',
+          port: 8080,
+          withUi: false,
+          logLevel: 'WARNING',
+        });
+
+        expect(dockerfile).toContain('--log_level=WARNING');
+      });
+
+      it('should include allow_origins when provided', () => {
+        const dockerfile = generateDockerfileContent({
+          appName: 'my-agent',
+          project: 'my-project',
+          port: 8080,
+          withUi: false,
+          allowOrigins: 'https://app.example.com,https://admin.example.com',
+        });
+
+        expect(dockerfile).toContain('--allow_origins=https://app.example.com,https://admin.example.com');
+      });
+
+      it('should include artifact_service_uri when provided', () => {
+        const dockerfile = generateDockerfileContent({
+          appName: 'my-agent',
+          project: 'my-project',
+          port: 8080,
+          withUi: false,
+          artifactServiceUri: 'gs://my-bucket/artifacts',
+        });
+
+        expect(dockerfile).toContain('--artifact_service_uri=gs://my-bucket/artifacts');
+      });
+
+      it('should copy agent files to correct path', () => {
+        const dockerfile = generateDockerfileContent({
+          appName: 'custom-agent',
+          project: 'my-project',
+          port: 8080,
+          withUi: false,
+        });
+
+        expect(dockerfile).toContain('COPY --chown=myuser:myuser "agents/custom-agent/"');
+        expect(dockerfile).toContain('/app/agents/custom-agent/');
+      });
+    });
+  });
 });
