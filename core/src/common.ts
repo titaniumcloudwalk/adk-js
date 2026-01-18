@@ -57,6 +57,14 @@ export {
   toGoogleGenaiFinishReason,
 } from './models/anthropic_llm.js';
 export type {AnthropicLlmParams, ClaudeParams} from './models/anthropic_llm.js';
+export {
+  ApigeeLlm,
+  getModelId as apigeeGetModelId,
+  identifyApiVersion as apigeeIdentifyApiVersion,
+  identifyVertexai as apigeeIdentifyVertexai,
+  validateModelString as apigeeValidateModelString,
+} from './models/apigee_llm.js';
+export type {ApigeeLlmParams, HttpRetryOptions} from './models/apigee_llm.js';
 export {BaseLlm, isBaseLlm} from './models/base_llm.js';
 export {
   LiteLlm,

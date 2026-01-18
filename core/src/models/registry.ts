@@ -7,6 +7,7 @@
 import {logger} from '../utils/logger.js';
 
 import {AnthropicLlm, Claude} from './anthropic_llm.js';
+import {ApigeeLlm} from './apigee_llm.js';
 import {BaseLlm} from './base_llm.js';
 import {Gemini} from './google_llm.js';
 import {LiteLlm} from './lite_llm.js';
@@ -149,3 +150,12 @@ LLMRegistry.register(AnthropicLlm);
  * See https://docs.litellm.ai/docs/providers for full provider list.
  */
 LLMRegistry.register(LiteLlm);
+
+/**
+ * Registers ApigeeLlm factory for Apigee AI Gateway integration.
+ *
+ * ApigeeLlm extends Gemini to route requests through an Apigee proxy,
+ * enabling enterprise features such as Model Armor, Rate Limiting,
+ * Token Limiting, Semantic Caching, and monitoring/auditing.
+ */
+LLMRegistry.register(ApigeeLlm);
