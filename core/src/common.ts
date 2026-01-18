@@ -331,6 +331,27 @@ export type {
   VectorSearchIndexSettings,
 } from './tools/spanner/index.js';
 
+// Bigtable tools
+export {
+  BigtableToolset,
+  DEFAULT_BIGTABLE_ADMIN_SCOPE,
+  DEFAULT_BIGTABLE_DATA_SCOPE,
+  getBigtableScopes,
+  getBigtableUserAgent,
+  validateBigtableToolSettings,
+} from './tools/bigtable/index.js';
+export type {
+  BigtableClient,
+  BigtableCredentialsConfig,
+  BigtableToolSettings,
+  BigtableToolsetOptions,
+  InstanceMetadata,
+  InstanceReference,
+  QueryResult as BigtableQueryResult,
+  TableMetadata as BigtableTableMetadata,
+  TableReference as BigtableTableReference,
+} from './tools/bigtable/index.js';
+
 export * from './artifacts/base_artifact_service.js';
 export * from './memory/base_memory_service.js';
 export * from './memory/memory_entry.js';
