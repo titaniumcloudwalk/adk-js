@@ -84,4 +84,39 @@ export class CallbackContext extends ReadonlyContext {
 
     return version;
   }
+
+  /**
+   * Loads a credential from the credential service.
+   *
+   * @param authConfig The auth config containing the credential key.
+   * @return A promise that resolves to the loaded credential, or undefined if
+   *     not found.
+   */
+  async loadCredential(authConfig: any): Promise<any> {
+    if (!this.invocationContext.credentialService) {
+      return undefined;
+    }
+
+    return await this.invocationContext.credentialService.loadCredential(
+      authConfig,
+      this as any,
+    );
+  }
+
+  /**
+   * Saves a credential to the credential service.
+   *
+   * @param authConfig The auth config containing the credential to save.
+   * @return A promise that resolves when the credential is saved.
+   */
+  async saveCredential(authConfig: any): Promise<void> {
+    if (!this.invocationContext.credentialService) {
+      return;
+    }
+
+    await this.invocationContext.credentialService.saveCredential(
+      authConfig,
+      this as any,
+    );
+  }
 }

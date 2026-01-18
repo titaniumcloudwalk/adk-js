@@ -14,14 +14,11 @@ import {CredentialExchangerRegistry} from '../../../src/auth/exchanger/credentia
 
 // Mock credential exchanger for testing
 class MockCredentialExchanger implements BaseCredentialExchanger {
-  async exchange({
-    authCredential,
-    authScheme,
-  }: {
-    authCredential: AuthCredential;
-    authScheme?: AuthScheme;
-  }): Promise<AuthCredential> {
-    return authCredential;
+  async exchange(
+    authCredential: AuthCredential,
+    authScheme?: AuthScheme,
+  ): Promise<{credential: AuthCredential; wasExchanged: boolean}> {
+    return {credential: authCredential, wasExchanged: false};
   }
 }
 
