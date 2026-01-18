@@ -124,6 +124,8 @@ export type {LlmRequest} from './models/llm_request.js';
 export type {LlmResponse} from './models/llm_response.js';
 export {LLMRegistry} from './models/registry.js';
 export {BasePlugin} from './plugins/base_plugin.js';
+export {ContextFilterPlugin} from './plugins/context_filter_plugin.js';
+export type {ContextFilterPluginOptions, CustomFilterFunction} from './plugins/context_filter_plugin.js';
 export {LoggingPlugin} from './plugins/logging_plugin.js';
 export {PluginManager} from './plugins/plugin_manager.js';
 export {getAskUserConfirmationFunctionCalls, InMemoryPolicyEngine, PolicyOutcome, REQUEST_CONFIRMATION_FUNCTION_CALL_NAME, SecurityPlugin} from './plugins/security_plugin.js';
