@@ -476,6 +476,21 @@ export type {
   AgentConfigYaml,
 } from './agents/config/index.js';
 
+// Computer Use Tools
+export {
+  BaseComputer,
+  ComputerEnvironment,
+  ComputerState,
+  EXCLUDED_COMPUTER_METHODS,
+  ComputerUseTool,
+  ComputerUseToolset,
+} from './tools/computer_use/index.js';
+export type {
+  ScrollDirection,
+  ComputerUseToolOptions,
+  ComputerUseToolsetOptions,
+} from './tools/computer_use/index.js';
+
 // Evaluation Framework
 export {
   // Core types
