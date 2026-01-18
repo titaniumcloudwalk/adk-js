@@ -5,6 +5,20 @@
  */
 
 export {BaseAgent, isBaseAgent} from './agents/base_agent.js';
+export {
+  App,
+  BaseEventsSummarizer,
+  createEventsCompactionConfig,
+  LlmEventSummarizer,
+  runCompactionForSlidingWindow,
+  validateAppName,
+} from './apps/index.js';
+export type {
+  AppConfig,
+  EventsCompactionConfig,
+  LlmEventSummarizerParams,
+  ResumabilityConfig,
+} from './apps/index.js';
 export {CallbackContext} from './agents/callback_context.js';
 export {functionsExportedForTestingOnly} from './agents/functions.js';
 export {InvocationContext} from './agents/invocation_context.js';
@@ -42,8 +56,8 @@ export {OAuth2DiscoveryManager} from './auth/oauth2_discovery.js';
 export {BuiltInCodeExecutor} from './code_executors/built_in_code_executor.js';
 export {createEvent, getFunctionCalls, getFunctionResponses, hasTrailingCodeExecutionResult, isFinalResponse, stringifyContent} from './events/event.js';
 export type {Event} from './events/event.js';
-export type {EventActions} from './events/event_actions.js';
-export {createEventActions} from './events/event_actions.js';
+export type {EventActions, EventCompaction} from './events/event_actions.js';
+export {createEventActions, createEventCompaction} from './events/event_actions.js';
 export {InMemoryMemoryService} from './memory/in_memory_memory_service.js';
 export {
   AnthropicLlm,

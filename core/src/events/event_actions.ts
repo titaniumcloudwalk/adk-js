@@ -4,10 +4,50 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import {Content} from '@google/genai';
+
 import {ToolConfirmation} from '../tools/tool_confirmation.js';
 
 // TODO: b/425992518 - Replace 'any' with a proper AuthConfig.
 type AuthConfig = any;
+
+/**
+ * Represents compacted event data from a sliding window of events.
+ *
+ * When events are compacted, this structure holds the summarized content
+ * along with the timestamp range of the original events.
+ */
+export interface EventCompaction {
+  /**
+   * The start timestamp of the compacted events, in milliseconds since epoch.
+   */
+  startTimestamp: number;
+
+  /**
+   * The end timestamp of the compacted events, in milliseconds since epoch.
+   */
+  endTimestamp: number;
+
+  /**
+   * The compacted content summarizing the events in the time range.
+   */
+  compactedContent: Content;
+}
+
+/**
+ * Creates an EventCompaction object with default values.
+ *
+ * @param params Optional partial EventCompaction to merge.
+ * @returns A complete EventCompaction object.
+ */
+export function createEventCompaction(
+    params: Partial<EventCompaction> = {}): EventCompaction {
+  return {
+    startTimestamp: params.startTimestamp ?? 0,
+    endTimestamp: params.endTimestamp ?? 0,
+    compactedContent: params.compactedContent ?? {role: 'model', parts: []},
+  };
+}
 
 /**
  * Represents the actions attached to an event.
@@ -68,6 +108,31 @@ export interface EventActions {
    * constructing LLM context.
    */
   rewindBeforeInvocationId?: string;
+
+  /**
+   * The compaction of the events.
+   *
+   * When set, this event represents a compacted summary of a range of previous
+   * events. The compaction contains the start and end timestamps along with
+   * the summarized content.
+   */
+  compaction?: EventCompaction;
+
+  /**
+   * The agent state at the current event, used for checkpoint and resume.
+   *
+   * Should only be set by ADK workflow for session rewind and resumption.
+   */
+  agentState?: Record<string, unknown>;
+
+  /**
+   * If true, the current agent has finished its current run.
+   *
+   * Note that there can be multiple events with endOfAgent=true for the same
+   * agent within one invocation when there is a loop.
+   * Should only be set by ADK workflow.
+   */
+  endOfAgent?: boolean;
 }
 
 /**
