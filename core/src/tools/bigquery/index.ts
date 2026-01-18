@@ -11,6 +11,8 @@
  * - Dataset and table metadata exploration
  * - SQL query execution with configurable write modes
  * - Job status monitoring
+ * - ML analytics (forecasting, contribution analysis, anomaly detection)
+ * - Natural language data insights via Gemini
  *
  * @example
  * ```typescript
@@ -24,9 +26,17 @@
  *   },
  * });
  *
+ * // Create a toolset with ML capabilities (requires PROTECTED mode)
+ * const mlToolset = new BigQueryToolset({
+ *   toolConfig: {
+ *     writeMode: WriteMode.PROTECTED,
+ *     maxQueryResultRows: 100,
+ *   },
+ * });
+ *
  * // Use specific tools
  * const toolset = new BigQueryToolset({
- *   toolFilter: ['list_dataset_ids', 'execute_sql'],
+ *   toolFilter: ['list_dataset_ids', 'execute_sql', 'forecast'],
  * });
  * ```
  *
@@ -72,3 +82,17 @@ export type {
 
 export type {BigQueryToolResult} from './metadata_tools.js';
 export type {QueryExecutionResult} from './query_tool.js';
+
+// ML tools exports
+export type {
+  AnomalyResult,
+  ContributionResult,
+  ForecastResult,
+} from './ml_tools.js';
+
+// Data insights exports
+export type {
+  DataInsightsMessage,
+  DataInsightsResult,
+  TableReference as DataInsightsTableReference,
+} from './data_insights_tool.js';

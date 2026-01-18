@@ -129,17 +129,25 @@ describe('BigQueryToolset', () => {
       });
     });
 
-    it('should return all 6 tools by default', async () => {
+    it('should return all 10 tools by default', async () => {
       const tools = await toolset.getTools();
-      expect(tools).toHaveLength(6);
+      expect(tools).toHaveLength(10);
 
       const toolNames = tools.map((t) => t.name);
+      // Metadata tools
       expect(toolNames).toContain('list_dataset_ids');
       expect(toolNames).toContain('get_dataset_info');
       expect(toolNames).toContain('list_table_ids');
       expect(toolNames).toContain('get_table_info');
       expect(toolNames).toContain('get_job_info');
+      // Query tool
       expect(toolNames).toContain('execute_sql');
+      // ML tools
+      expect(toolNames).toContain('forecast');
+      expect(toolNames).toContain('analyze_contribution');
+      expect(toolNames).toContain('detect_anomalies');
+      // Data insights tool
+      expect(toolNames).toContain('ask_data_insights');
     });
 
     it('should filter tools by name array', async () => {
@@ -436,7 +444,7 @@ describe('BigQueryToolset', () => {
 
       // Getting tools again should work (new client created)
       const tools = await toolset.getTools();
-      expect(tools).toHaveLength(6);
+      expect(tools).toHaveLength(10);
     });
   });
 });

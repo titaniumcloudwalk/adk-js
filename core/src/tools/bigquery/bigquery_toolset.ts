@@ -14,7 +14,9 @@ import {
   validateBigQueryToolConfig,
 } from './config.js';
 import {BigQueryCredentialsConfig} from './credentials.js';
+import {createDataInsightsTool} from './data_insights_tool.js';
 import {createMetadataTools} from './metadata_tools.js';
+import {createMlTools} from './ml_tools.js';
 import {createExecuteSqlTool} from './query_tool.js';
 
 /**
@@ -48,22 +50,43 @@ export interface BigQueryToolsetOptions {
 }
 
 /**
- * A toolset that provides access to BigQuery for data exploration and querying.
+ * A toolset that provides access to BigQuery for data exploration, querying,
+ * and advanced ML analytics.
  *
  * The toolset includes tools for:
- * - Listing datasets and tables
- * - Getting dataset and table metadata
- * - Executing SQL queries (with configurable write mode)
- * - Getting job information
+ * - **Metadata** - Listing datasets and tables, getting detailed metadata
+ * - **Querying** - Executing SQL queries (with configurable write mode)
+ * - **ML Analytics** - Time series forecasting, contribution analysis, anomaly detection
+ * - **Data Insights** - Natural language queries using Gemini Data Analytics API
+ *
+ * **Available Tools:**
+ * 1. `list_dataset_ids` - List all dataset IDs in a project
+ * 2. `get_dataset_info` - Get detailed dataset metadata
+ * 3. `list_table_ids` - List all table IDs in a dataset
+ * 4. `get_table_info` - Get detailed table metadata with schema
+ * 5. `get_job_info` - Get information about a BigQuery job
+ * 6. `execute_sql` - Execute SQL queries (behavior depends on writeMode)
+ * 7. `forecast` - Time series forecasting with TimesFM 2.0
+ * 8. `analyze_contribution` - Contribution analysis for metric changes
+ * 9. `detect_anomalies` - Anomaly detection using ARIMA_PLUS
+ * 10. `ask_data_insights` - Natural language queries via Gemini
  *
  * @example
  * ```typescript
  * import {BigQueryToolset, WriteMode} from '@google/adk';
  *
- * // Create a read-only toolset
+ * // Create a read-only toolset (no ML tools that require models)
  * const toolset = new BigQueryToolset({
  *   toolConfig: {
  *     writeMode: WriteMode.BLOCKED,
+ *     maxQueryResultRows: 100,
+ *   },
+ * });
+ *
+ * // Create a toolset with ML capabilities (PROTECTED mode for temp models)
+ * const mlToolset = new BigQueryToolset({
+ *   toolConfig: {
+ *     writeMode: WriteMode.PROTECTED,
  *     maxQueryResultRows: 100,
  *   },
  * });
@@ -125,14 +148,27 @@ export class BigQueryToolset extends BaseToolset {
 
   /**
    * Returns the tools exposed by this toolset.
+   *
+   * Returns up to 10 tools:
+   * - 5 metadata tools (list_dataset_ids, get_dataset_info, list_table_ids,
+   *   get_table_info, get_job_info)
+   * - 1 query tool (execute_sql)
+   * - 3 ML tools (forecast, analyze_contribution, detect_anomalies)
+   * - 1 data insights tool (ask_data_insights)
    */
   override async getTools(context?: ReadonlyContext): Promise<BaseTool[]> {
     if (!this.tools) {
       const getClient = () => this.getClient();
 
       this.tools = [
+        // Metadata tools
         ...createMetadataTools(getClient),
+        // Query tool
         createExecuteSqlTool(getClient, this.toolConfig),
+        // ML tools (forecast, analyze_contribution, detect_anomalies)
+        ...createMlTools(getClient, this.toolConfig),
+        // Data insights tool
+        createDataInsightsTool(this.credentialsConfig, this.toolConfig),
       ];
     }
 
