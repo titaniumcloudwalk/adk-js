@@ -80,6 +80,11 @@ const ARTIFACT_SERVICE_URI_OPTION = new Option(
 
 const program = new Command('ADK CLI');
 
+const TRACE_TO_CLOUD_OPTION = new Option(
+    '--trace_to_cloud [boolean]',
+    'Optional. Whether to enable cloud trace for telemetry.')
+    .default(false);
+
 program.command('web')
     .description('Start ADK web server')
     .addArgument(AGENT_DIR_ARGUMENT)
@@ -89,6 +94,7 @@ program.command('web')
     .addOption(VERBOSE_OPTION)
     .addOption(LOG_LEVEL_OPTION)
     .addOption(ARTIFACT_SERVICE_URI_OPTION)
+    .addOption(TRACE_TO_CLOUD_OPTION)
     .action((agentsDir: string, options: Record<string, string>) => {
       setLogLevel(getLogLevelFromOptions(options));
 
@@ -101,6 +107,7 @@ program.command('web')
         artifactService: options['artifact_service_uri'] ?
             getArtifactServiceFromUri(options['artifact_service_uri']) :
             undefined,
+        traceToCloud: !!options['trace_to_cloud'],
       });
 
       server.start();
@@ -115,6 +122,7 @@ program.command('api_server')
     .addOption(VERBOSE_OPTION)
     .addOption(LOG_LEVEL_OPTION)
     .addOption(ARTIFACT_SERVICE_URI_OPTION)
+    .addOption(TRACE_TO_CLOUD_OPTION)
     .action((agentsDir: string, options: Record<string, string>) => {
       setLogLevel(getLogLevelFromOptions(options));
 
@@ -127,6 +135,7 @@ program.command('api_server')
         artifactService: options['artifact_service_uri'] ?
             getArtifactServiceFromUri(options['artifact_service_uri']) :
             undefined,
+        traceToCloud: !!options['trace_to_cloud'],
       });
     server.start();
   });
@@ -224,6 +233,10 @@ DEPLOY_COMMAND.command('cloud_run')
         '--with_ui [boolean]',
         'Optional. Deploy ADK Web UI if set. (default: deploy ADK API server only)',
         false)
+    .option(
+        '--trace_to_cloud [boolean]',
+        'Optional. Whether to enable cloud trace for telemetry.',
+        false)
     .addOption(ORIGINS_OPTION)
     .addOption(VERBOSE_OPTION)
     .addOption(LOG_LEVEL_OPTION)
@@ -255,6 +268,7 @@ DEPLOY_COMMAND.command('cloud_run')
         allowOrigins: options['allow_origins'],
         extraGcloudArgs,
         artifactServiceUri: options['artifact_service_uri'],
+        traceToCloud: !!options['trace_to_cloud'],
       });
     });
 

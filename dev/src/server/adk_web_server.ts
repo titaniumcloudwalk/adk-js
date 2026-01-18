@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {BaseAgent, BaseArtifactService, BaseMemoryService, BaseSessionService, Event, getFunctionCalls, getFunctionResponses, InMemoryArtifactService, InMemoryMemoryService, InMemorySessionService, Runner, StreamingMode} from '@google/adk';
+import {BaseAgent, BaseArtifactService, BaseMemoryService, BaseSessionService, Event, getFunctionCalls, getFunctionResponses, InMemoryArtifactService, InMemoryMemoryService, InMemorySessionService, Runner, StreamingMode, maybeSetOtelProviders, getGcpExporters, getGcpResource} from '@google/adk';
 import cors from 'cors';
 import express, {Request, Response} from 'express';
 import * as http from 'http';
@@ -24,6 +24,7 @@ interface ServerOptions {
   agentLoader?: AgentLoader;
   serveDebugUI?: boolean;
   allowOrigins?: string;
+  traceToCloud?: boolean;
 }
 
 export class AdkWebServer {
@@ -52,9 +53,22 @@ export class AdkWebServer {
     this.serveDebugUI = options.serveDebugUI ?? false;
     this.allowOrigins = options.allowOrigins;
 
+    // Setup telemetry if trace_to_cloud flag is enabled
+    if (options.traceToCloud) {
+      this.setupTelemetry();
+    }
+
     this.app = express();
 
     this.init();
+  }
+
+  private async setupTelemetry() {
+    const gcpExporters = await getGcpExporters({
+      enableTracing: true,
+      enableMetrics: false,
+    });
+    maybeSetOtelProviders([gcpExporters], getGcpResource());
   }
 
   private init() {

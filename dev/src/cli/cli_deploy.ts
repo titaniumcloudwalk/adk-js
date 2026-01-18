@@ -26,6 +26,7 @@ export interface CreateDockerFileContentOptions {
   logLevel: string;
   allowOrigins?: string;
   artifactServiceUri?: string;
+  traceToCloud?: boolean;
 }
 
 export interface DeployToCloudRunOptions extends
@@ -173,6 +174,10 @@ function createDockerFileContent(
         `--artifact_service_uri=${options.artifactServiceUri}`);
   }
 
+  if (options.traceToCloud) {
+    adkServerOptions.push('--trace_to_cloud');
+  }
+
   return `
 FROM node:lts-alpine
 WORKDIR /app
@@ -290,6 +295,7 @@ export async function deployToCloudRun(options: DeployToCloudRunOptions) {
       withUi: options.withUi,
       logLevel: options.logLevel,
       allowOrigins: options.allowOrigins,
+      traceToCloud: options.traceToCloud,
     });
 
     console.info('Deploying to Cloud Run...');
