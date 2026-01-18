@@ -20,6 +20,14 @@ import {
   createArtifactServiceFromOptions,
   createMemoryServiceFromOptions,
 } from './service_factory.js';
+import {
+  runEvaluation,
+  createEvalSetCommand,
+  addEvalCaseCommand,
+  listEvalSetsCommand,
+  showEvalSetCommand,
+  deleteEvalSetCommand,
+} from './cli_eval.js';
 
 dotenv.config();
 
@@ -510,6 +518,122 @@ DEPLOY_COMMAND.command('gke')
         artifactServiceUri: options['artifact_service_uri'],
         traceToCloud: !!options['trace_to_cloud'],
       });
+    });
+
+// Evaluation command
+program.command('eval')
+    .description('Run evaluations on an agent using eval sets')
+    .argument('<agent>', 'Agent file path (.js or .ts)')
+    .argument('[eval_sets...]', 'Eval set file paths or IDs (format: id or id:case1,case2)')
+    .option(
+        '--config <path>',
+        'Optional. Path to evaluation config file (JSON). Default uses tool_trajectory and response_match metrics.')
+    .option(
+        '--print_detailed_results [boolean]',
+        'Optional. Print detailed results for each eval case.',
+        false)
+    .addOption(EVAL_STORAGE_URI_OPTION)
+    .addOption(VERBOSE_OPTION)
+    .addOption(LOG_LEVEL_OPTION)
+    .action(async (agentPath: string, evalSets: string[], options: Record<string, string | boolean>) => {
+      setLogLevel(getLogLevelFromOptions(options as {verbose?: boolean; log_level?: string}));
+
+      const exitCode = await runEvaluation({
+        agentPath: getAbsolutePath(agentPath),
+        evalSets,
+        configFile: options['config'] as string | undefined,
+        printDetailedResults: !!options['print_detailed_results'],
+        evalStorageUri: options['eval_storage_uri'] as string | undefined,
+      });
+
+      process.exit(exitCode);
+    });
+
+// Eval set management commands
+const EVAL_SET_COMMAND = program.command('eval_set')
+    .description('Manage evaluation sets')
+    .allowUnknownOption()
+    .allowExcessArguments();
+
+EVAL_SET_COMMAND.command('create')
+    .description('Create a new eval set')
+    .argument('<agent>', 'Agent file path (.js or .ts)')
+    .argument('<eval_set_id>', 'ID for the new eval set')
+    .option('--name <string>', 'Optional. Human-readable name for the eval set')
+    .option('--description <string>', 'Optional. Description of the eval set')
+    .addOption(EVAL_STORAGE_URI_OPTION)
+    .addOption(VERBOSE_OPTION)
+    .addOption(LOG_LEVEL_OPTION)
+    .action(async (agentPath: string, evalSetId: string, options: Record<string, string>) => {
+      setLogLevel(getLogLevelFromOptions(options));
+
+      await createEvalSetCommand({
+        agentPath: getAbsolutePath(agentPath),
+        evalSetId,
+        name: options['name'],
+        description: options['description'],
+        evalStorageUri: options['eval_storage_uri'],
+      });
+    });
+
+EVAL_SET_COMMAND.command('add_eval_case')
+    .description('Add eval cases to an existing eval set')
+    .argument('<agent>', 'Agent file path (.js or .ts)')
+    .argument('<eval_set_id>', 'ID of the eval set')
+    .option(
+        '--scenarios_file <path>',
+        'Optional. Path to JSON file with conversation scenarios')
+    .option(
+        '--session_input_file <path>',
+        'Optional. Path to JSON file with session inputs')
+    .addOption(EVAL_STORAGE_URI_OPTION)
+    .addOption(VERBOSE_OPTION)
+    .addOption(LOG_LEVEL_OPTION)
+    .action(async (agentPath: string, evalSetId: string, options: Record<string, string>) => {
+      setLogLevel(getLogLevelFromOptions(options));
+
+      await addEvalCaseCommand({
+        agentPath: getAbsolutePath(agentPath),
+        evalSetId,
+        scenariosFile: options['scenarios_file'],
+        sessionInputFile: options['session_input_file'],
+        evalStorageUri: options['eval_storage_uri'],
+      });
+    });
+
+EVAL_SET_COMMAND.command('list')
+    .description('List all eval sets for an agent')
+    .argument('<agent>', 'Agent file path (.js or .ts)')
+    .addOption(EVAL_STORAGE_URI_OPTION)
+    .addOption(VERBOSE_OPTION)
+    .addOption(LOG_LEVEL_OPTION)
+    .action(async (agentPath: string, options: Record<string, string>) => {
+      setLogLevel(getLogLevelFromOptions(options));
+      await listEvalSetsCommand(getAbsolutePath(agentPath), options['eval_storage_uri']);
+    });
+
+EVAL_SET_COMMAND.command('show')
+    .description('Show details of an eval set')
+    .argument('<agent>', 'Agent file path (.js or .ts)')
+    .argument('<eval_set_id>', 'ID of the eval set')
+    .addOption(EVAL_STORAGE_URI_OPTION)
+    .addOption(VERBOSE_OPTION)
+    .addOption(LOG_LEVEL_OPTION)
+    .action(async (agentPath: string, evalSetId: string, options: Record<string, string>) => {
+      setLogLevel(getLogLevelFromOptions(options));
+      await showEvalSetCommand(getAbsolutePath(agentPath), evalSetId, options['eval_storage_uri']);
+    });
+
+EVAL_SET_COMMAND.command('delete')
+    .description('Delete an eval set')
+    .argument('<agent>', 'Agent file path (.js or .ts)')
+    .argument('<eval_set_id>', 'ID of the eval set to delete')
+    .addOption(EVAL_STORAGE_URI_OPTION)
+    .addOption(VERBOSE_OPTION)
+    .addOption(LOG_LEVEL_OPTION)
+    .action(async (agentPath: string, evalSetId: string, options: Record<string, string>) => {
+      setLogLevel(getLogLevelFromOptions(options));
+      await deleteEvalSetCommand(getAbsolutePath(agentPath), evalSetId, options['eval_storage_uri']);
     });
 
 program.parse(process.argv);
