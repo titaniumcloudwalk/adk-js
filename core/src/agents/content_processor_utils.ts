@@ -21,9 +21,15 @@ import {removeClientFunctionCallId, REQUEST_CONFIRMATION_FUNCTION_CALL_NAME, REQ
  */
 export function getContents(
     events: Event[], agentName: string, currentBranch?: string): Content[] {
+  // First, filter out events that are annulled by a rewind.
+  // By iterating backward, when a rewind event is found, we skip all events
+  // from that point back to the `rewindBeforeInvocationId`, thus removing
+  // them from the history used for the LLM request.
+  const rewindFilteredEvents = filterRewindEvents(events);
+
   const filteredEvents: Event[] = [];
 
-  for (const event of events) {
+  for (const event of rewindFilteredEvents) {
     // Skip events without content, or generated neither by user nor by model.
     // E.g. events purely for mutating session states.
     if (!event.content?.role || event.content.parts?.[0]?.text === '') {
@@ -468,4 +474,52 @@ function safeStringify(obj: unknown): string {
   } catch (e) {
     return String(obj);
   }
+}
+
+/**
+ * Filters out events that have been annulled by a rewind operation.
+ *
+ * This function iterates through events in reverse order. When it encounters
+ * a rewind event (one with `rewindBeforeInvocationId` set), it skips all events
+ * from that point back to the invocation that was rewound to. This effectively
+ * removes the rewound events from the history that will be sent to the LLM.
+ *
+ * The rewind event itself is also excluded from the result since it only serves
+ * as a marker for the state restoration.
+ *
+ * @param events The list of events to filter.
+ * @returns The filtered list of events with rewound events removed.
+ */
+function filterRewindEvents(events: Event[]): Event[] {
+  const result: Event[] = [];
+  let i = events.length - 1;
+
+  while (i >= 0) {
+    const event = events[i];
+
+    if (event.actions?.rewindBeforeInvocationId) {
+      // This is a rewind event - find the target invocation and skip all events
+      // between the rewind target and this rewind event
+      const rewindInvocationId = event.actions.rewindBeforeInvocationId;
+
+      // Search backwards for the event with the target invocation ID
+      for (let j = 0; j < i; j++) {
+        if (events[j].invocationId === rewindInvocationId) {
+          // Skip to just before the rewind target
+          // (we want to include events before the rewind point)
+          i = j;
+          break;
+        }
+      }
+    } else {
+      // Not a rewind event - include it in the result
+      result.push(event);
+    }
+
+    i--;
+  }
+
+  // Reverse to restore chronological order
+  result.reverse();
+  return result;
 }

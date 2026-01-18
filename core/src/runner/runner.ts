@@ -318,6 +318,261 @@ export class Runner {
     return true;
   }
   // TODO - b/425992518: Implement runLive and related methods.
+
+  /**
+   * Rewinds the session to before the specified invocation.
+   *
+   * This operation creates a rewind event that:
+   * 1. Reverts session state to what it was before the specified invocation
+   * 2. Restores artifacts to their versions at the rewind point
+   * 3. Marks the invocation (and all subsequent invocations) as "rewound"
+   *
+   * After a rewind, the rewound events are still in the event log but will be
+   * ignored when constructing LLM context for future requests.
+   *
+   * @param params The parameters for the rewind operation.
+   * @param params.userId The user ID of the session.
+   * @param params.sessionId The session ID of the session.
+   * @param params.rewindBeforeInvocationId The invocation ID to rewind before.
+   * @throws Error if the session is not found or the invocation ID is not found.
+   */
+  async rewindAsync({
+    userId,
+    sessionId,
+    rewindBeforeInvocationId,
+  }: {
+    userId: string;
+    sessionId: string;
+    rewindBeforeInvocationId: string;
+  }): Promise<void> {
+    const session = await this.sessionService.getSession({
+      appName: this.appName,
+      userId,
+      sessionId,
+    });
+
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    // Find the event index for the rewind point
+    let rewindEventIndex = -1;
+    for (let i = 0; i < session.events.length; i++) {
+      if (session.events[i].invocationId === rewindBeforeInvocationId) {
+        rewindEventIndex = i;
+        break;
+      }
+    }
+
+    if (rewindEventIndex === -1) {
+      throw new Error(`Invocation ID not found: ${rewindBeforeInvocationId}`);
+    }
+
+    // Compute state delta to reverse changes
+    const stateDelta = this.computeStateDeltaForRewind(session, rewindEventIndex);
+
+    // Compute artifact delta to reverse changes
+    const artifactDelta = await this.computeArtifactDeltaForRewind(
+      session,
+      rewindEventIndex
+    );
+
+    // Create rewind event
+    const rewindEvent = createEvent({
+      invocationId: newInvocationContextId(),
+      author: 'user',
+      actions: createEventActions({
+        rewindBeforeInvocationId,
+        stateDelta,
+        artifactDelta,
+      }),
+    });
+
+    logger.info(`Rewinding session to invocation: ${rewindBeforeInvocationId}`);
+
+    await this.sessionService.appendEvent({session, event: rewindEvent});
+  }
+
+  /**
+   * Computes the state delta needed to revert session state to the rewind point.
+   *
+   * This method:
+   * 1. Reconstructs the state as it was at the rewind point
+   * 2. Compares it to the current state
+   * 3. Returns a delta that will restore the state to the rewind point
+   *
+   * Note: App-level (app:*) and user-level (user:*) state keys are NOT reverted.
+   *
+   * @param session The session to compute the delta for.
+   * @param rewindEventIndex The index of the first event to rewind.
+   * @returns The state delta to apply.
+   */
+  private computeStateDeltaForRewind(
+    session: Session,
+    rewindEventIndex: number
+  ): Record<string, unknown> {
+    // Reconstruct state at the rewind point by replaying events up to (but not
+    // including) the rewind index
+    const stateAtRewindPoint: Record<string, unknown> = {};
+    for (let i = 0; i < rewindEventIndex; i++) {
+      const event = session.events[i];
+      if (event.actions?.stateDelta) {
+        for (const [key, value] of Object.entries(event.actions.stateDelta)) {
+          // Skip app-level and user-level state
+          if (key.startsWith('app:') || key.startsWith('user:')) {
+            continue;
+          }
+          if (value === null || value === undefined) {
+            delete stateAtRewindPoint[key];
+          } else {
+            stateAtRewindPoint[key] = value;
+          }
+        }
+      }
+    }
+
+    const currentState = session.state;
+    const rewindStateDelta: Record<string, unknown> = {};
+
+    // Add/update keys to match state at rewind point
+    for (const [key, valueAtRewind] of Object.entries(stateAtRewindPoint)) {
+      if (!(key in currentState) || currentState[key] !== valueAtRewind) {
+        rewindStateDelta[key] = valueAtRewind;
+      }
+    }
+
+    // Set keys to null if they were added after the rewind point
+    for (const key of Object.keys(currentState)) {
+      // Skip app-level and user-level state
+      if (key.startsWith('app:') || key.startsWith('user:')) {
+        continue;
+      }
+      if (!(key in stateAtRewindPoint)) {
+        rewindStateDelta[key] = null;
+      }
+    }
+
+    return rewindStateDelta;
+  }
+
+  /**
+   * Computes the artifact delta needed to revert artifacts to the rewind point.
+   *
+   * This method:
+   * 1. Tracks artifact versions at the rewind point
+   * 2. Compares to current versions
+   * 3. Restores artifacts to their previous versions or marks them inaccessible
+   *
+   * Note: User artifacts (user:*) are NOT reverted.
+   *
+   * @param session The session to compute the delta for.
+   * @param rewindEventIndex The index of the first event to rewind.
+   * @returns The artifact delta to apply.
+   */
+  private async computeArtifactDeltaForRewind(
+    session: Session,
+    rewindEventIndex: number
+  ): Promise<Record<string, number>> {
+    if (!this.artifactService) {
+      return {};
+    }
+
+    // Track artifact versions at the rewind point
+    const versionsAtRewindPoint: Record<string, number> = {};
+    for (let i = 0; i < rewindEventIndex; i++) {
+      const event = session.events[i];
+      if (event.actions?.artifactDelta) {
+        Object.assign(versionsAtRewindPoint, event.actions.artifactDelta);
+      }
+    }
+
+    // Track current artifact versions (all events)
+    const currentVersions: Record<string, number> = {};
+    for (const event of session.events) {
+      if (event.actions?.artifactDelta) {
+        Object.assign(currentVersions, event.actions.artifactDelta);
+      }
+    }
+
+    const rewindArtifactDelta: Record<string, number> = {};
+
+    for (const [filename, currentVersion] of Object.entries(currentVersions)) {
+      // User artifacts are not restored on rewind
+      if (filename.startsWith('user:')) {
+        continue;
+      }
+
+      const versionAtRewind = versionsAtRewindPoint[filename];
+
+      // Skip if version hasn't changed
+      if (versionAtRewind === currentVersion) {
+        continue;
+      }
+
+      // The new version will be currentVersion + 1
+      rewindArtifactDelta[filename] = currentVersion + 1;
+
+      let artifactToSave: {inlineData?: {mimeType: string; data: string}} | {fileData?: {fileUri: string}};
+
+      if (versionAtRewind === undefined) {
+        // Artifact did not exist at rewind point - mark it as inaccessible
+        // by saving an empty blob
+        artifactToSave = {
+          inlineData: {
+            mimeType: 'application/octet-stream',
+            data: '',
+          },
+        };
+      } else {
+        // Artifact version changed after rewind point - restore to version at
+        // rewind point by creating a file reference to the old version
+        const artifactUri = getArtifactUri({
+          appName: this.appName,
+          userId: session.userId,
+          sessionId: session.id,
+          filename,
+          version: versionAtRewind,
+        });
+        artifactToSave = {
+          fileData: {
+            fileUri: artifactUri,
+          },
+        };
+      }
+
+      await this.artifactService.saveArtifact({
+        appName: this.appName,
+        userId: session.userId,
+        sessionId: session.id,
+        filename,
+        artifact: artifactToSave,
+      });
+    }
+
+    return rewindArtifactDelta;
+  }
+}
+
+/**
+ * Generates an artifact URI for a specific version of an artifact.
+ *
+ * @param params The parameters for generating the URI.
+ * @returns The artifact URI.
+ */
+function getArtifactUri({
+  appName,
+  userId,
+  sessionId,
+  filename,
+  version,
+}: {
+  appName: string;
+  userId: string;
+  sessionId: string;
+  filename: string;
+  version: number;
+}): string {
+  return `artifact://${appName}/${userId}/${sessionId}/${filename}?version=${version}`;
 }
 
 /**

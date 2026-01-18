@@ -58,6 +58,16 @@ export interface EventActions {
    * call id.
    */
   requestedToolConfirmations: {[key: string]: ToolConfirmation};
+
+  /**
+   * The invocation ID to rewind the session to.
+   *
+   * When set, this event represents a rewind operation that reverts the session
+   * state to what it was before the specified invocation. All events from the
+   * rewind point to (but not including) this rewind event will be skipped when
+   * constructing LLM context.
+   */
+  rewindBeforeInvocationId?: string;
 }
 
 /**
