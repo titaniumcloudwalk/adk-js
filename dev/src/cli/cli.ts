@@ -18,6 +18,7 @@ import { createAgent } from './cli_create.js';
 import {
   createSessionServiceFromOptions,
   createArtifactServiceFromOptions,
+  createMemoryServiceFromOptions,
 } from './service_factory.js';
 
 dotenv.config();
@@ -92,6 +93,31 @@ const USE_LOCAL_STORAGE_OPTION = new Option(
     'Optional. Whether to use local .adk storage for sessions/artifacts when no URI is provided (default: true).')
     .default(true);
 
+const MEMORY_SERVICE_URI_OPTION = new Option(
+    '--memory_service_uri <string>',
+    'Optional. The URI of the memory service. Supported URIs: agentengine://<resource>, rag://<corpus_id>, memory:// for in-memory.');
+
+const A2A_OPTION = new Option(
+    '--a2a [boolean]',
+    'Optional. Enable Agent-to-Agent protocol endpoints (default: false).')
+    .default(false);
+
+const EVAL_STORAGE_URI_OPTION = new Option(
+    '--eval_storage_uri <string>',
+    'Optional. Storage URI for evaluation results. Supported URIs: gs://<bucket> for GCS.');
+
+const URL_PREFIX_OPTION = new Option(
+    '--url_prefix <string>',
+    'Optional. URL path prefix for reverse proxy/API gateway mounting.');
+
+const LOGO_TEXT_OPTION = new Option(
+    '--logo_text <string>',
+    'Optional. Text to display in web UI logo.');
+
+const LOGO_IMAGE_URL_OPTION = new Option(
+    '--logo_image_url <string>',
+    'Optional. URL of image to display in web UI logo.');
+
 const program = new Command('ADK CLI');
 
 const TRACE_TO_CLOUD_OPTION = new Option(
@@ -108,20 +134,54 @@ program.command('web')
     .addOption(VERBOSE_OPTION)
     .addOption(LOG_LEVEL_OPTION)
     .addOption(ARTIFACT_SERVICE_URI_OPTION)
+    .addOption(SESSION_SERVICE_URI_OPTION)
+    .addOption(MEMORY_SERVICE_URI_OPTION)
+    .addOption(USE_LOCAL_STORAGE_OPTION)
     .addOption(TRACE_TO_CLOUD_OPTION)
-    .action((agentsDir: string, options: Record<string, string>) => {
+    .addOption(A2A_OPTION)
+    .addOption(EVAL_STORAGE_URI_OPTION)
+    .addOption(URL_PREFIX_OPTION)
+    .addOption(LOGO_TEXT_OPTION)
+    .addOption(LOGO_IMAGE_URL_OPTION)
+    .action(async (agentsDir: string, options: Record<string, string>) => {
       setLogLevel(getLogLevelFromOptions(options));
 
+      const absoluteAgentsDir = getAbsolutePath(agentsDir);
+      const useLocalStorage = String(options['use_local_storage']) !== 'false';
+
+      // Create services from URI options (supports Cloud Run/K8s detection)
+      const sessionService = await createSessionServiceFromOptions({
+        baseDir: absoluteAgentsDir,
+        sessionServiceUri: options['session_service_uri'],
+        useLocalStorage,
+      });
+
+      const artifactService = await createArtifactServiceFromOptions({
+        baseDir: absoluteAgentsDir,
+        artifactServiceUri: options['artifact_service_uri'],
+        useLocalStorage,
+      });
+
+      const memoryService = await createMemoryServiceFromOptions({
+        baseDir: absoluteAgentsDir,
+        memoryServiceUri: options['memory_service_uri'],
+      });
+
       const server = new AdkWebServer({
-        agentsDir: getAbsolutePath(agentsDir),
+        agentsDir: absoluteAgentsDir,
         host: options['host'],
         port: parseInt(options['port'], 10),
         serveDebugUI: true,
         allowOrigins: options['allow_origins'],
-        artifactService: options['artifact_service_uri'] ?
-            getArtifactServiceFromUri(options['artifact_service_uri']) :
-            undefined,
+        sessionService,
+        artifactService,
+        memoryService,
         traceToCloud: !!options['trace_to_cloud'],
+        enableA2a: !!options['a2a'],
+        evalStorageUri: options['eval_storage_uri'],
+        urlPrefix: options['url_prefix'],
+        logoText: options['logo_text'],
+        logoImageUrl: options['logo_image_url'],
       });
 
       server.start();
@@ -136,23 +196,51 @@ program.command('api_server')
     .addOption(VERBOSE_OPTION)
     .addOption(LOG_LEVEL_OPTION)
     .addOption(ARTIFACT_SERVICE_URI_OPTION)
+    .addOption(SESSION_SERVICE_URI_OPTION)
+    .addOption(MEMORY_SERVICE_URI_OPTION)
+    .addOption(USE_LOCAL_STORAGE_OPTION)
     .addOption(TRACE_TO_CLOUD_OPTION)
-    .action((agentsDir: string, options: Record<string, string>) => {
+    .addOption(A2A_OPTION)
+    .addOption(URL_PREFIX_OPTION)
+    .action(async (agentsDir: string, options: Record<string, string>) => {
       setLogLevel(getLogLevelFromOptions(options));
 
+      const absoluteAgentsDir = getAbsolutePath(agentsDir);
+      const useLocalStorage = String(options['use_local_storage']) !== 'false';
+
+      // Create services from URI options (supports Cloud Run/K8s detection)
+      const sessionService = await createSessionServiceFromOptions({
+        baseDir: absoluteAgentsDir,
+        sessionServiceUri: options['session_service_uri'],
+        useLocalStorage,
+      });
+
+      const artifactService = await createArtifactServiceFromOptions({
+        baseDir: absoluteAgentsDir,
+        artifactServiceUri: options['artifact_service_uri'],
+        useLocalStorage,
+      });
+
+      const memoryService = await createMemoryServiceFromOptions({
+        baseDir: absoluteAgentsDir,
+        memoryServiceUri: options['memory_service_uri'],
+      });
+
       const server = new AdkWebServer({
-        agentsDir: getAbsolutePath(agentsDir),
+        agentsDir: absoluteAgentsDir,
         host: options['host'],
         port: parseInt(options['port'], 10),
         serveDebugUI: false,
         allowOrigins: options['allow_origins'],
-        artifactService: options['artifact_service_uri'] ?
-            getArtifactServiceFromUri(options['artifact_service_uri']) :
-            undefined,
+        sessionService,
+        artifactService,
+        memoryService,
         traceToCloud: !!options['trace_to_cloud'],
+        enableA2a: !!options['a2a'],
+        urlPrefix: options['url_prefix'],
       });
-    server.start();
-  });
+      server.start();
+    });
 
 program.command('create')
     .description('Creates a new agent')

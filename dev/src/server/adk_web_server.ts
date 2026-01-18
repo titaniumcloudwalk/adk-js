@@ -14,17 +14,40 @@ import {AgentLoader} from '../utils/agent_loader.js';
 
 import {getAgentGraphAsDot} from './agent_graph.js';
 
-interface ServerOptions {
+/**
+ * Configuration options for AdkWebServer.
+ */
+export interface ServerOptions {
+  /** Directory containing agent files. */
   agentsDir?: string;
+  /** Host to bind the server to. */
   host?: string;
+  /** Port to listen on. */
   port?: number;
+  /** Session service implementation. */
   sessionService?: BaseSessionService;
+  /** Memory service implementation. */
   memoryService?: BaseMemoryService;
+  /** Artifact service implementation. */
   artifactService?: BaseArtifactService;
+  /** Custom agent loader. */
   agentLoader?: AgentLoader;
+  /** Whether to serve the debug UI. */
   serveDebugUI?: boolean;
+  /** CORS allowed origins. */
   allowOrigins?: string;
+  /** Enable Cloud Trace telemetry. */
   traceToCloud?: boolean;
+  /** Enable Agent-to-Agent protocol endpoints. */
+  enableA2a?: boolean;
+  /** Storage URI for evaluation results (e.g., gs://bucket). */
+  evalStorageUri?: string;
+  /** URL path prefix for reverse proxy/API gateway mounting. */
+  urlPrefix?: string;
+  /** Text to display in web UI logo. */
+  logoText?: string;
+  /** URL of image to display in web UI logo. */
+  logoImageUrl?: string;
 }
 
 export class AdkWebServer {
@@ -38,6 +61,11 @@ export class AdkWebServer {
   private readonly artifactService: BaseArtifactService;
   private readonly serveDebugUI: boolean;
   private readonly allowOrigins?: string;
+  private readonly enableA2a: boolean;
+  private readonly evalStorageUri?: string;
+  private readonly urlPrefix?: string;
+  private readonly logoText?: string;
+  private readonly logoImageUrl?: string;
   private server?: http.Server;
 
   constructor(options: ServerOptions) {
@@ -52,6 +80,11 @@ export class AdkWebServer {
         options.agentLoader ?? new AgentLoader(options.agentsDir);
     this.serveDebugUI = options.serveDebugUI ?? false;
     this.allowOrigins = options.allowOrigins;
+    this.enableA2a = options.enableA2a ?? false;
+    this.evalStorageUri = options.evalStorageUri;
+    this.urlPrefix = options.urlPrefix;
+    this.logoText = options.logoText;
+    this.logoImageUrl = options.logoImageUrl;
 
     // Setup telemetry if trace_to_cloud flag is enabled
     if (options.traceToCloud) {
@@ -71,14 +104,27 @@ export class AdkWebServer {
     maybeSetOtelProviders([gcpExporters], getGcpResource());
   }
 
+  /**
+   * Builds a path with the optional URL prefix.
+   */
+  private buildPath(routePath: string): string {
+    if (!this.urlPrefix) {
+      return routePath;
+    }
+    // Ensure prefix starts with / and route starts with /
+    const prefix = this.urlPrefix.startsWith('/') ? this.urlPrefix : `/${this.urlPrefix}`;
+    return `${prefix}${routePath}`;
+  }
+
   private init() {
     const app = this.app;
 
     if (this.serveDebugUI) {
-      app.get('/', (req: Request, res: Response) => {
-        res.redirect('/dev-ui');
+      const devUiPath = this.buildPath('/dev-ui');
+      app.get(this.buildPath('/'), (req: Request, res: Response) => {
+        res.redirect(devUiPath);
       });
-      app.use('/dev-ui', express.static(path.join(__dirname, '../browser'), {
+      app.use(devUiPath, express.static(path.join(__dirname, '../browser'), {
         setHeaders: (res: Response, path: string) => {
           if (path.endsWith('.js')) {
             res.setHeader('Content-Type', 'text/javascript');
@@ -97,7 +143,17 @@ export class AdkWebServer {
       limit: '50mb',
     }));
 
-    app.get('/list-apps', async (req: Request, res: Response) => {
+    // Server metadata endpoint (includes logo customization)
+    app.get(this.buildPath('/server-metadata'), (req: Request, res: Response) => {
+      res.json({
+        logoText: this.logoText,
+        logoImageUrl: this.logoImageUrl,
+        urlPrefix: this.urlPrefix || '',
+        a2aEnabled: this.enableA2a,
+      });
+    });
+
+    app.get(this.buildPath('/list-apps'), async (req: Request, res: Response) => {
       try {
         const apps = await this.agentLoader.listAgents();
 
@@ -107,17 +163,17 @@ export class AdkWebServer {
       }
     });
 
-    app.get('/debug/trace/:eventId', (req: Request, res: Response) => {
+    app.get(this.buildPath('/debug/trace/:eventId'), (req: Request, res: Response) => {
       return res.status(501).json({error: 'Not implemented'});
     });
 
     app.get(
-        '/debug/trace/session/:sessionId', (req: Request, res: Response) => {
+        this.buildPath('/debug/trace/session/:sessionId'), (req: Request, res: Response) => {
           return res.status(501).json({error: 'Not implemented'});
         });
 
     app.get(
-        '/apps/:appName/users/:userId/sessions/:sessionId/events/:eventId/graph',
+        this.buildPath('/apps/:appName/users/:userId/sessions/:sessionId/events/:eventId/graph'),
         async (req: Request, res: Response) => {
           const appName = req.params['appName'];
           const userId = req.params['userId'];
@@ -186,7 +242,7 @@ export class AdkWebServer {
 
     // ------------------------- Session related endpoints ---------------------
     app.get(
-        '/apps/:appName/users/:userId/sessions/:sessionId',
+        this.buildPath('/apps/:appName/users/:userId/sessions/:sessionId'),
         async (req: Request, res: Response) => {
           try {
             const appName = req.params['appName'];
@@ -211,7 +267,7 @@ export class AdkWebServer {
         });
 
     app.get(
-        '/apps/:appName/users/:userId/sessions',
+        this.buildPath('/apps/:appName/users/:userId/sessions'),
         async (req: Request, res: Response) => {
           try {
             const appName = req.params['appName'];
@@ -229,7 +285,7 @@ export class AdkWebServer {
         });
 
     app.post(
-        '/apps/:appName/users/:userId/sessions/:sessionId',
+        this.buildPath('/apps/:appName/users/:userId/sessions/:sessionId'),
         async (req: Request, res: Response) => {
           try {
             const appName = req.params['appName'];
@@ -262,7 +318,7 @@ export class AdkWebServer {
         });
 
     app.post(
-        '/apps/:appName/users/:userId/sessions',
+        this.buildPath('/apps/:appName/users/:userId/sessions'),
         async (req: Request, res: Response) => {
           try {
             const appName = req.params['appName'];
@@ -280,7 +336,7 @@ export class AdkWebServer {
         });
 
     app.delete(
-        '/apps/:appName/users/:userId/sessions/:sessionId',
+        this.buildPath('/apps/:appName/users/:userId/sessions/:sessionId'),
         async (req: Request, res: Response) => {
           try {
             const appName = req.params['appName'];
@@ -312,7 +368,7 @@ export class AdkWebServer {
 
     // ----------------------- Artifact related endpoints ----------------------
     app.get(
-        '/apps/:appName/users/:userId/sessions/:sessionId/artifacts/:artifactName',
+        this.buildPath('/apps/:appName/users/:userId/sessions/:sessionId/artifacts/:artifactName'),
         async (req: Request, res: Response) => {
           try {
             const appName = req.params['appName'];
@@ -340,7 +396,7 @@ export class AdkWebServer {
         });
 
     app.get(
-        '/apps/:appName/users/:userId/sessions/:sessionId/artifacts/:artifactName/versions/:versionId',
+        this.buildPath('/apps/:appName/users/:userId/sessions/:sessionId/artifacts/:artifactName/versions/:versionId'),
         async (req: Request, res: Response) => {
           try {
             const appName = req.params['appName'];
@@ -370,7 +426,7 @@ export class AdkWebServer {
         });
 
     app.get(
-        '/apps/:appName/users/:userId/sessions/:sessionId/artifacts',
+        this.buildPath('/apps/:appName/users/:userId/sessions/:sessionId/artifacts'),
         async (req: Request, res: Response) => {
           try {
             const appName = req.params['appName'];
@@ -390,7 +446,7 @@ export class AdkWebServer {
         });
 
     app.get(
-        '/apps/:appName/users/:userId/sessions/:sessionId/artifacts/:artifactName/versions',
+        this.buildPath('/apps/:appName/users/:userId/sessions/:sessionId/artifacts/:artifactName/versions'),
         async (req: Request, res: Response) => {
           try {
             const appName = req.params['appName'];
@@ -412,7 +468,7 @@ export class AdkWebServer {
         });
 
     app.delete(
-        '/apps/:appName/users/:userId/sessions/:sessionId/artifacts/:artifactName',
+        this.buildPath('/apps/:appName/users/:userId/sessions/:sessionId/artifacts/:artifactName'),
         async (req: Request, res: Response) => {
           try {
             const appName = req.params['appName'];
@@ -436,47 +492,47 @@ export class AdkWebServer {
     // --------------------- Eval Sets related endpoints -----------------------
     // TODO: Implement eval set related endpoints.
     app.post(
-        '/apps/:appName/eval_sets/:evalSetId',
+        this.buildPath('/apps/:appName/eval_sets/:evalSetId'),
         (req: Request, res: Response) => {
           return res.status(501).json({error: 'Not implemented'});
         });
 
-    app.get('/apps/:appName/eval_sets', (req: Request, res: Response) => {
+    app.get(this.buildPath('/apps/:appName/eval_sets'), (req: Request, res: Response) => {
       return res.status(501).json({error: 'Not implemented'});
     });
 
     app.post(
-        '/apps/:appName/eval_sets/:evalSetId/add_session',
+        this.buildPath('/apps/:appName/eval_sets/:evalSetId/add_session'),
         (req: Request, res: Response) => {
           return res.status(501).json({error: 'Not implemented'});
         });
 
     app.get(
-        '/apps/:appName/eval_sets/:evalSetId/evals',
+        this.buildPath('/apps/:appName/eval_sets/:evalSetId/evals'),
         (req: Request, res: Response) => {
           return res.status(501).json({error: 'Not implemented'});
         });
 
     app.get(
-        '/apps/:appName/eval_sets/:evalSetId/evals/:evalCaseId',
+        this.buildPath('/apps/:appName/eval_sets/:evalSetId/evals/:evalCaseId'),
         (req: Request, res: Response) => {
           return res.status(501).json({error: 'Not implemented'});
         });
 
     app.put(
-        '/apps/:appName/eval_sets/:evalSetId/evals/:evalCaseId',
+        this.buildPath('/apps/:appName/eval_sets/:evalSetId/evals/:evalCaseId'),
         (req: Request, res: Response) => {
           return res.status(501).json({error: 'Not implemented'});
         });
 
     app.delete(
-        '/apps/:appName/eval_sets/:evalSetId/evals/:evalCaseId',
+        this.buildPath('/apps/:appName/eval_sets/:evalSetId/evals/:evalCaseId'),
         (req: Request, res: Response) => {
           return res.status(501).json({error: 'Not implemented'});
         });
 
     app.post(
-        '/apps/:appName/eval_sets/:evalSetId/run_eval',
+        this.buildPath('/apps/:appName/eval_sets/:evalSetId/run_eval'),
         (req: Request, res: Response) => {
           return res.status(501).json({error: 'Not implemented'});
         });
@@ -484,21 +540,21 @@ export class AdkWebServer {
     // ----------------------- Eval Results related endpoints ------------------
     // TODO: Implement eval results related endpoints.
     app.get(
-        '/apps/:appName/eval_results/:evalResultId',
+        this.buildPath('/apps/:appName/eval_results/:evalResultId'),
         (req: Request, res: Response) => {
           return res.status(501).json({error: 'Not implemented'});
         });
 
-    app.get('/apps/:appName/eval_results', (req: Request, res: Response) => {
+    app.get(this.buildPath('/apps/:appName/eval_results'), (req: Request, res: Response) => {
       return res.status(501).json({error: 'Not implemented'});
     });
 
-    app.get('/apps/:appName/eval_metrics', (req: Request, res: Response) => {
+    app.get(this.buildPath('/apps/:appName/eval_metrics'), (req: Request, res: Response) => {
       return res.status(501).json({error: 'Not implemented'});
     });
 
     // -------------------------- Run related endpoints ------------------------
-    app.post('/run', async (req: Request, res: Response) => {
+    app.post(this.buildPath('/run'), async (req: Request, res: Response) => {
       const {appName, userId, sessionId, newMessage} = req.body;
       const session = await this.sessionService.getSession({
         appName,
@@ -531,7 +587,7 @@ export class AdkWebServer {
       }
     });
 
-    app.post('/run_sse', async (req: Request, res: Response) => {
+    app.post(this.buildPath('/run_sse'), async (req: Request, res: Response) => {
       const {appName, userId, sessionId, newMessage, streaming} = req.body;
 
       const session = await this.sessionService.getSession({
