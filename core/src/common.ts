@@ -163,6 +163,15 @@ export {
   createVertexAiSearchTool,
 } from './tools/vertex_ai_search_tool.js';
 export type {VertexAiSearchToolConfig} from './tools/vertex_ai_search_tool.js';
+export {
+  BaseRetrievalTool,
+  createVertexAiRagRetrieval,
+  VertexAiRagRetrieval,
+} from './tools/retrieval/index.js';
+export type {
+  BaseRetrievalToolParams,
+  VertexAiRagRetrievalConfig,
+} from './tools/retrieval/index.js';
 export {LogLevel, setLogLevel} from './utils/logger.js';
 export {isGemini2OrAbove} from './utils/model_name.js';
 export {zodObjectToSchema} from './utils/simple_zod_to_json.js';
