@@ -200,6 +200,39 @@ export type {
 } from './tools/openapi/index.js';
 export {AuthSchemeType} from './auth/auth_schemes.js';
 
+// BigQuery tools
+export {
+  BIGQUERY_SESSION_INFO_KEY,
+  BigQueryToolset,
+  DEFAULT_BIGQUERY_SCOPE,
+  getBigQueryScopes,
+  getBigQueryUserAgent,
+  MINIMUM_BYTES_BILLED,
+  validateBigQueryToolConfig,
+  WriteMode,
+} from './tools/bigquery/index.js';
+export type {
+  BigQueryClient,
+  BigQueryClientFactory,
+  BigQueryCredentialsConfig,
+  BigQueryToolConfig,
+  BigQueryToolResult,
+  BigQueryToolsetOptions,
+  DatasetMetadata,
+  DatasetReference,
+  DryRunResult,
+  JobMetadata,
+  JobReference,
+  QueryExecutionResult,
+  QueryOptions,
+  QueryResult,
+  SchemaField,
+  SessionInfo,
+  TableMetadata,
+  TableReference,
+  TableSchema,
+} from './tools/bigquery/index.js';
+
 export * from './artifacts/base_artifact_service.js';
 export * from './memory/base_memory_service.js';
 export * from './memory/memory_entry.js';
