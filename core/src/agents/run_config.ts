@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {AudioTranscriptionConfig, Modality, ProactivityConfig, RealtimeInputConfig, SpeechConfig} from '@google/genai';
+import {AudioTranscriptionConfig, ContextWindowCompressionConfig, Modality, ProactivityConfig, RealtimeInputConfig, SessionResumptionConfig, SpeechConfig} from '@google/genai';
 
 import {logger} from '../utils/logger.js';
 
@@ -79,6 +79,35 @@ export interface RunConfig {
   realtimeInputConfig?: RealtimeInputConfig;
 
   /**
+   * Configures session resumption mechanism. Only supports transparent
+   * session resumption mode currently.
+   */
+  sessionResumption?: SessionResumptionConfig;
+
+  /**
+   * Configuration for context window compression. If set, this will
+   * enable context window compression for LLM input.
+   */
+  contextWindowCompression?: ContextWindowCompressionConfig;
+
+  /**
+   * Saves live video and audio data to session and artifact service.
+   */
+  saveLiveBlob?: boolean;
+
+  /**
+   * @deprecated Use saveLiveBlob instead. If set to true, it saves
+   * live video and audio data to session and artifact service.
+   */
+  saveLiveAudio?: boolean;
+
+  /**
+   * Custom metadata for the current invocation. This can be used by plugins,
+   * A2A protocol, and other components to store invocation-specific data.
+   */
+  customMetadata?: Record<string, unknown>;
+
+  /**
    * A limit on the total number of llm calls for a given run.
    *
    * Valid Values:
@@ -89,13 +118,35 @@ export interface RunConfig {
   maxLlmCalls?: number;
 }
 
-export function createRunConfig(params: Partial<RunConfig> = {}) {
+function warnDeprecated(field: string, replacement: string): void {
+  logger.warn(
+    `The '${field}' config is deprecated and will be removed in a future ` +
+    `release. Please use '${replacement}' instead.`
+  );
+}
+
+export function createRunConfig(params: Partial<RunConfig> = {}): RunConfig {
+  // Handle deprecated saveLiveAudio field - migrate to saveLiveBlob
+  let saveLiveBlob = params.saveLiveBlob ?? false;
+  if (params.saveLiveAudio !== undefined) {
+    warnDeprecated('saveLiveAudio', 'saveLiveBlob');
+    if (params.saveLiveAudio) {
+      saveLiveBlob = true;
+    }
+  }
+
+  // Warn if deprecated saveInputBlobsAsArtifacts is used
+  if (params.saveInputBlobsAsArtifacts === true) {
+    warnDeprecated('saveInputBlobsAsArtifacts', 'artifact handling in tool context');
+  }
+
   return {
     saveInputBlobsAsArtifacts: false,
     supportCfc: false,
     enableAffectiveDialog: false,
     streamingMode: StreamingMode.NONE,
-    maxLlmCalls: validateMaxLlmCalls(params.maxLlmCalls || 500),
+    saveLiveBlob,
+    maxLlmCalls: validateMaxLlmCalls(params.maxLlmCalls ?? 500),
     ...params,
   };
 }

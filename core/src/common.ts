@@ -15,7 +15,7 @@ export type {AfterModelCallback, AfterToolCallback, BeforeModelCallback, BeforeT
 export {LoopAgent} from './agents/loop_agent.js';
 export {ParallelAgent} from './agents/parallel_agent.js';
 export type {RunConfig} from './agents/run_config.js';
-export {StreamingMode} from './agents/run_config.js';
+export {createRunConfig, StreamingMode} from './agents/run_config.js';
 export {SequentialAgent} from './agents/sequential_agent.js';
 export {InMemoryArtifactService} from './artifacts/in_memory_artifact_service.js';
 export type {BaseCredentialService} from './auth/credential_service/base_credential_service.js';
