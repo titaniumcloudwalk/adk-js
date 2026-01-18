@@ -12,7 +12,7 @@ import {Command, Argument, Option} from 'commander';
 import {LogLevel, setLogLevel, BaseArtifactService, GcsArtifactService} from '@google/adk';
 import {AdkWebServer} from '../server/adk_web_server.js';
 import {runAgent} from './cli_run.js';
-import {deployToCloudRun} from './cli_deploy.js';
+import {deployToCloudRun, deployToAgentEngine} from './cli_deploy.js';
 import {getTempDir} from '../utils/file_utils.js';
 import { createAgent } from './cli_create.js';
 
@@ -268,6 +268,70 @@ DEPLOY_COMMAND.command('cloud_run')
         allowOrigins: options['allow_origins'],
         extraGcloudArgs,
         artifactServiceUri: options['artifact_service_uri'],
+        traceToCloud: !!options['trace_to_cloud'],
+      });
+    });
+
+DEPLOY_COMMAND.command('agent_engine')
+    .description('Deploy agent to Vertex AI Agent Engine')
+    .addArgument(AGENT_DIR_ARGUMENT)
+    .option(
+        '--project [string]',
+        'Optional. Google Cloud project ID. If not set, uses default from gcloud config or .env')
+    .option(
+        '--region [string]',
+        'Optional. Google Cloud region. If not set, uses default from gcloud config or .env')
+    .option(
+        '--api_key [string]',
+        'Optional. API key for Express Mode. Overrides GOOGLE_API_KEY from .env')
+    .option(
+        '--agent_engine_id [string]',
+        'Optional. Agent Engine ID to update. If not set, creates a new Agent Engine')
+    .option(
+        '--display_name [string]',
+        'Optional. Display name for the Agent Engine')
+    .option(
+        '--description [string]',
+        'Optional. Description of the Agent Engine')
+    .option(
+        '--adk_app [string]',
+        'Optional. Name of the ADK app module file (without extension)',
+        'agent_engine_app')
+    .option(
+        '--adk_app_object [string]',
+        'Optional. The ADK app object to use: "rootAgent", "root_agent", or "app"',
+        'rootAgent')
+    .option(
+        '--temp_folder [string]',
+        'Optional. Temp folder for the generated Agent Engine source files')
+    .option(
+        '--env_file [string]',
+        'Optional. Path to .env file for environment variables')
+    .option(
+        '--agent_engine_config_file [string]',
+        'Optional. Path to .agent_engine_config.json file')
+    .option(
+        '--trace_to_cloud [boolean]',
+        'Optional. Whether to enable Cloud Trace for telemetry',
+        false)
+    .addOption(VERBOSE_OPTION)
+    .addOption(LOG_LEVEL_OPTION)
+    .action(async (agentPath: string, options: Record<string, string>) => {
+      setLogLevel(getLogLevelFromOptions(options));
+
+      await deployToAgentEngine({
+        agentPath: getAbsolutePath(agentPath),
+        project: options['project'],
+        region: options['region'],
+        apiKey: options['api_key'],
+        agentEngineId: options['agent_engine_id'],
+        displayName: options['display_name'],
+        description: options['description'],
+        adkApp: options['adk_app'],
+        adkAppObject: options['adk_app_object'],
+        tempFolder: options['temp_folder'],
+        envFile: options['env_file'],
+        agentEngineConfigFile: options['agent_engine_config_file'],
         traceToCloud: !!options['trace_to_cloud'],
       });
     });
