@@ -25,7 +25,10 @@ export type {
   ResumabilityConfig,
 } from './apps/index.js';
 export {CallbackContext} from './agents/callback_context.js';
-export {functionsExportedForTestingOnly} from './agents/functions.js';
+export {
+  functionsExportedForTestingOnly,
+  handleFunctionCallsLive,
+} from './agents/functions.js';
 export {InvocationContext} from './agents/invocation_context.js';
 export {LiveRequestQueue} from './agents/live_request_queue.js';
 export type {LiveRequest} from './agents/live_request_queue.js';
@@ -165,8 +168,15 @@ export {State} from './sessions/state.js';
 export {AlreadyExistsError} from './errors/already_exists_error.js';
 export {AgentTool} from './tools/agent_tool.js';
 export {BaseTool} from './tools/base_tool.js';
+export type {CallLiveToolRequest} from './tools/base_tool.js';
 export {BaseToolset} from './tools/base_toolset.js';
 export {FunctionTool} from './tools/function_tool.js';
+export type {StreamingToolFunction} from './tools/function_tool.js';
+export {
+  STOP_STREAMING_FUNCTION_NAME,
+  StopStreamingTool,
+  stopStreamingTool,
+} from './tools/stop_streaming_tool.js';
 export {
   createGoogleSearchAgent,
   GoogleSearchAgentTool,
@@ -197,6 +207,11 @@ export type {
   BaseRetrievalToolParams,
   VertexAiRagRetrievalConfig,
 } from './tools/retrieval/index.js';
+export {
+  Aclosing,
+  isAsyncGeneratorFunction,
+  withAclosing,
+} from './utils/async_generator_utils.js';
 export {LogLevel, setLogLevel} from './utils/logger.js';
 export {isGemini2OrAbove} from './utils/model_name.js';
 export {zodObjectToSchema} from './utils/simple_zod_to_json.js';

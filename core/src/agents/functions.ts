@@ -8,12 +8,16 @@
 import {Content, createUserContent, FunctionCall, Part} from '@google/genai';
 import {isEmpty} from 'lodash-es';
 
+import {ActiveStreamingTool} from '../agents/active_streaming_tool.js';
 import {InvocationContext} from '../agents/invocation_context.js';
 import {createEvent, Event, getFunctionCalls} from '../events/event.js';
 import {mergeEventActions} from '../events/event_actions.js';
 import {BaseTool} from '../tools/base_tool.js';
+import {FunctionTool} from '../tools/function_tool.js';
+import {STOP_STREAMING_FUNCTION_NAME} from '../tools/stop_streaming_tool.js';
 import {ToolConfirmation} from '../tools/tool_confirmation.js';
 import {ToolContext} from '../tools/tool_context.js';
+import {Aclosing} from '../utils/async_generator_utils.js';
 import {randomUUID} from '../utils/env_aware_utils.js';
 import {logger} from '../utils/logger.js';
 
@@ -29,6 +33,7 @@ export const functionsExportedForTestingOnly = {
   handleFunctionCallList,
   generateAuthEvent,
   generateRequestConfirmationEvent,
+  handleFunctionCallsLive,
 };
 
 export function generateClientFunctionCallId(): string {
@@ -597,4 +602,397 @@ export function mergeParallelFunctionResponseEvents(
   });
 }
 
-// TODO - b/425992518: support function call in live connection.
+/**
+ * Mutex-like lock for thread-safe access to streaming tools.
+ * Uses a simple Promise-based pattern since JS is single-threaded but async.
+ */
+class StreamingLock {
+  private locked = false;
+  private waitQueue: (() => void)[] = [];
+
+  async acquire(): Promise<void> {
+    if (!this.locked) {
+      this.locked = true;
+      return;
+    }
+    return new Promise((resolve) => {
+      this.waitQueue.push(resolve);
+    });
+  }
+
+  release(): void {
+    if (this.waitQueue.length > 0) {
+      const next = this.waitQueue.shift()!;
+      next();
+    } else {
+      this.locked = false;
+    }
+  }
+}
+
+/**
+ * Handles function calls in live/streaming mode.
+ *
+ * This function is called during bidirectional streaming sessions to execute
+ * tool function calls. It supports:
+ * - Regular tool execution
+ * - Streaming tool execution (async generator functions)
+ * - stop_streaming built-in function for canceling streaming tools
+ *
+ * @param invocationContext - The invocation context
+ * @param functionCallEvent - Event containing the function calls to execute
+ * @param toolsDict - Map of tool names to tool instances
+ * @param beforeToolCallbacks - Callbacks to run before tool execution
+ * @param afterToolCallbacks - Callbacks to run after tool execution
+ * @returns A single merged event containing all function responses
+ */
+export async function handleFunctionCallsLive({
+  invocationContext,
+  functionCallEvent,
+  toolsDict,
+  beforeToolCallbacks,
+  afterToolCallbacks,
+}: {
+  invocationContext: InvocationContext,
+  functionCallEvent: Event,
+  toolsDict: Record<string, BaseTool>,
+  beforeToolCallbacks: SingleBeforeToolCallback[],
+  afterToolCallbacks: SingleAfterToolCallback[],
+}): Promise<Event | null> {
+  const functionCalls = getFunctionCalls(functionCallEvent);
+  const streamingLock = new StreamingLock();
+  const functionResponseEvents: Event[] = [];
+
+  for (const functionCall of functionCalls) {
+    const event = await executeSingleFunctionCallLive({
+      invocationContext,
+      functionCall,
+      toolsDict,
+      beforeToolCallbacks,
+      afterToolCallbacks,
+      streamingLock,
+    });
+    if (event) {
+      functionResponseEvents.push(event);
+    }
+  }
+
+  if (!functionResponseEvents.length) {
+    return null;
+  }
+
+  return mergeParallelFunctionResponseEvents(functionResponseEvents);
+}
+
+/**
+ * Executes a single function call in live/streaming mode.
+ */
+async function executeSingleFunctionCallLive({
+  invocationContext,
+  functionCall,
+  toolsDict,
+  beforeToolCallbacks,
+  afterToolCallbacks,
+  streamingLock,
+}: {
+  invocationContext: InvocationContext,
+  functionCall: FunctionCall,
+  toolsDict: Record<string, BaseTool>,
+  beforeToolCallbacks: SingleBeforeToolCallback[],
+  afterToolCallbacks: SingleAfterToolCallback[],
+  streamingLock: StreamingLock,
+}): Promise<Event | null> {
+  const {tool, toolContext} = getToolAndContext({
+    invocationContext,
+    functionCall,
+    toolsDict,
+  });
+
+  logger.debug(`execute_tool_live ${tool.name}`);
+  const functionArgs = functionCall.args ?? {};
+
+  // Run before_tool_callbacks
+  let functionResponse: unknown = null;
+  for (const callback of beforeToolCallbacks) {
+    functionResponse = await callback({
+      tool,
+      args: functionArgs,
+      context: toolContext,
+    });
+    if (functionResponse) {
+      break;
+    }
+  }
+
+  // If no callback provided response, execute tool
+  if (functionResponse == null) {
+    functionResponse = await processFunctionLiveHelper({
+      tool,
+      toolContext,
+      functionCall,
+      functionArgs,
+      invocationContext,
+      streamingLock,
+    });
+  }
+
+  // Run after_tool_callbacks
+  let alteredResponse: unknown = null;
+
+  // Normalize response to object before callbacks
+  if (typeof functionResponse !== 'object' || functionResponse == null) {
+    functionResponse = {result: functionResponse};
+  }
+
+  for (const callback of afterToolCallbacks) {
+    alteredResponse = await callback({
+      tool,
+      args: functionArgs,
+      context: toolContext,
+      response: functionResponse as Record<string, unknown>,
+    });
+    if (alteredResponse) {
+      break;
+    }
+  }
+  if (alteredResponse != null) {
+    functionResponse = alteredResponse;
+  }
+
+  // Handle long-running tools with no response
+  if (tool.isLongRunning && !functionResponse) {
+    return null;
+  }
+
+  // Ensure response is object
+  if (typeof functionResponse !== 'object' || functionResponse == null) {
+    functionResponse = {result: functionResponse};
+  }
+
+  // Build the function response event
+  return createEvent({
+    invocationId: invocationContext.invocationId,
+    author: invocationContext.agent.name,
+    content: createUserContent({
+      functionResponse: {
+        id: toolContext.functionCallId,
+        name: tool.name,
+        response: functionResponse as Record<string, unknown>,
+      },
+    }),
+    actions: toolContext.actions,
+    branch: invocationContext.branch,
+  });
+}
+
+/**
+ * Helper function that handles the core logic for live function execution.
+ *
+ * This handles three cases:
+ * 1. stop_streaming - Cancels an active streaming function
+ * 2. Streaming function - Starts async generator and registers in activeStreamingTools
+ * 3. Regular function - Executes normally via runAsync
+ */
+async function processFunctionLiveHelper({
+  tool,
+  toolContext,
+  functionCall,
+  functionArgs,
+  invocationContext,
+  streamingLock,
+}: {
+  tool: BaseTool,
+  toolContext: ToolContext,
+  functionCall: FunctionCall,
+  functionArgs: Record<string, unknown>,
+  invocationContext: InvocationContext,
+  streamingLock: StreamingLock,
+}): Promise<unknown> {
+  // Case 1: Handle stop_streaming function call
+  if (
+    functionCall.name === STOP_STREAMING_FUNCTION_NAME &&
+    'function_name' in functionArgs
+  ) {
+    return await handleStopStreaming({
+      functionArgs,
+      invocationContext,
+      streamingLock,
+    });
+  }
+
+  // Case 2: Handle streaming tool (async generator function)
+  if (tool instanceof FunctionTool && tool.isStreamingFunction) {
+    return await startStreamingTool({
+      tool,
+      toolContext,
+      functionArgs,
+      invocationContext,
+      streamingLock,
+    });
+  }
+
+  // Case 3: Regular tool execution
+  return await tool.runAsync({args: functionArgs, toolContext});
+}
+
+/**
+ * Handles the stop_streaming function call to cancel an active streaming tool.
+ */
+async function handleStopStreaming({
+  functionArgs,
+  invocationContext,
+  streamingLock,
+}: {
+  functionArgs: Record<string, unknown>,
+  invocationContext: InvocationContext,
+  streamingLock: StreamingLock,
+}): Promise<{status: string}> {
+  const functionName = functionArgs['function_name'] as string;
+
+  // Thread-safe access to active_streaming_tools
+  await streamingLock.acquire();
+  let task: Promise<void> | undefined;
+  let abortController: AbortController | undefined;
+
+  try {
+    const activeTools = invocationContext.activeStreamingTools;
+    if (
+      activeTools &&
+      functionName in activeTools &&
+      activeTools[functionName].task
+    ) {
+      task = activeTools[functionName].task;
+      // Store reference to abort controller if we add one
+      abortController = (activeTools[functionName] as unknown as {abortController?: AbortController}).abortController;
+    }
+  } finally {
+    streamingLock.release();
+  }
+
+  if (task) {
+    // Request cancellation via abort controller if available
+    if (abortController) {
+      abortController.abort();
+    }
+
+    try {
+      // Wait for task to complete with timeout
+      await Promise.race([
+        task,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout')), 1000)
+        ),
+      ]);
+    } catch {
+      // Task was cancelled or timed out
+      logger.info(`Task ${functionName} was cancelled or timed out`);
+    }
+
+    // Clean up the reference
+    await streamingLock.acquire();
+    try {
+      const activeTools = invocationContext.activeStreamingTools;
+      if (activeTools && functionName in activeTools) {
+        activeTools[functionName].task = undefined;
+      }
+    } finally {
+      streamingLock.release();
+    }
+
+    return {status: `Successfully stopped streaming function ${functionName}`};
+  }
+
+  return {status: `No active streaming function named ${functionName} found`};
+}
+
+/**
+ * Starts a streaming tool execution as an async task.
+ *
+ * Creates a task that:
+ * 1. Runs the async generator tool
+ * 2. Sends results to the live request queue
+ * 3. Registers the task in activeStreamingTools for cancellation support
+ */
+async function startStreamingTool({
+  tool,
+  toolContext,
+  functionArgs,
+  invocationContext,
+  streamingLock,
+}: {
+  tool: FunctionTool,
+  toolContext: ToolContext,
+  functionArgs: Record<string, unknown>,
+  invocationContext: InvocationContext,
+  streamingLock: StreamingLock,
+}): Promise<{status: string}> {
+  // Define the async task that runs the streaming tool
+  const runToolAndUpdateQueue = async (signal?: AbortSignal) => {
+    try {
+      const aclosing = new Aclosing(
+        tool._callLive({
+          args: functionArgs,
+          toolContext,
+          invocationContext,
+        }),
+      );
+
+      for await (const result of aclosing) {
+        // Check for cancellation
+        if (signal?.aborted) {
+          break;
+        }
+
+        // Send result to live request queue
+        if (invocationContext.liveRequestQueue) {
+          const content: Content = {
+            role: 'user',
+            parts: [
+              {text: `Function ${tool.name} returned: ${result}`},
+            ],
+          };
+          invocationContext.liveRequestQueue.sendContent(content);
+        }
+      }
+    } catch (error) {
+      // Handle cancellation or other errors
+      if (signal?.aborted) {
+        logger.debug(`Streaming tool ${tool.name} was cancelled`);
+      } else {
+        logger.error(`Error in streaming tool ${tool.name}:`, error);
+      }
+    }
+  };
+
+  // Create abort controller for cancellation support
+  const abortController = new AbortController();
+
+  // Create and start the task
+  const task = runToolAndUpdateQueue(abortController.signal);
+
+  // Register the streaming tool
+  await streamingLock.acquire();
+  try {
+    if (!invocationContext.activeStreamingTools) {
+      invocationContext.activeStreamingTools = {};
+    }
+
+    if (tool.name in invocationContext.activeStreamingTools) {
+      invocationContext.activeStreamingTools[tool.name].task = task;
+      // Store abort controller for cancellation
+      (invocationContext.activeStreamingTools[tool.name] as unknown as {abortController?: AbortController}).abortController = abortController;
+    } else {
+      const streamingTool = new ActiveStreamingTool({task});
+      (streamingTool as unknown as {abortController?: AbortController}).abortController = abortController;
+      invocationContext.activeStreamingTools[tool.name] = streamingTool;
+    }
+  } finally {
+    streamingLock.release();
+  }
+
+  // Return pending status immediately
+  return {
+    status:
+      'The function is running asynchronously and the results are pending.',
+  };
+}

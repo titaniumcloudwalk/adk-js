@@ -11,9 +11,11 @@ import {
   type ZodRawShape,
 } from 'zod';
 
+import {LiveRequestQueue} from '../agents/live_request_queue.js';
+import {Aclosing, isAsyncGeneratorFunction} from '../utils/async_generator_utils.js';
 import {isZodObject, zodObjectToSchema} from '../utils/simple_zod_to_json.js';
 
-import {BaseTool, RunAsyncToolRequest} from './base_tool.js';
+import {BaseTool, CallLiveToolRequest, RunAsyncToolRequest} from './base_tool.js';
 import {ToolContext} from './tool_context.js';
 
 /**
@@ -34,15 +36,28 @@ export type ToolExecuteArgument<TParameters extends ToolInputParameters> =
       ? unknown
       : string;
 
-/*
+/**
  * The function to execute by the tool.
+ * Supports regular functions, async functions, and async generator functions.
  */
 type ToolExecuteFunction<
   TParameters extends ToolInputParameters,
 > = (
   input: ToolExecuteArgument<TParameters>,
   tool_context?: ToolContext,
-) => Promise<unknown> | unknown;
+) => Promise<unknown> | unknown | AsyncGenerator<unknown>;
+
+/**
+ * A streaming tool function that accepts an input stream for bidirectional streaming.
+ * Used for live/streaming tool execution that can receive data while producing output.
+ */
+export type StreamingToolFunction<
+  TParameters extends ToolInputParameters,
+> = (
+  input: ToolExecuteArgument<TParameters>,
+  tool_context: ToolContext,
+  input_stream?: LiveRequestQueue,
+) => AsyncGenerator<unknown>;
 
 /**
  * A function that determines whether confirmation is required for a tool execution.
@@ -218,6 +233,66 @@ export class FunctionTool<
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       throw new Error(`Error in tool '${this.name}': ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Checks if this tool's execute function is an async generator function.
+   * Async generator functions are used for streaming tool execution.
+   */
+  get isStreamingFunction(): boolean {
+    return isAsyncGeneratorFunction(this.execute);
+  }
+
+  /**
+   * Executes the tool in live/streaming mode for async generator functions.
+   *
+   * This method is called for streaming tool execution in bidirectional
+   * streaming scenarios. It:
+   * 1. Injects the input_stream parameter if the tool is registered in activeStreamingTools
+   * 2. Yields results as they become available from the async generator
+   *
+   * @param request The request to run the tool in live mode.
+   * @yields Results as they become available during streaming.
+   */
+  override async *_callLive(request: CallLiveToolRequest): AsyncGenerator<unknown> {
+    const {args, toolContext, invocationContext} = request;
+
+    // Validate and parse arguments
+    let validatedArgs: unknown = args;
+    if (this.parameters instanceof ZodObject) {
+      validatedArgs = this.parameters.parse(args);
+    }
+
+    // Check if we need to inject input_stream for bidirectional streaming
+    const activeStreamingTools = invocationContext.activeStreamingTools;
+    let inputStream: LiveRequestQueue | undefined;
+    if (
+      activeStreamingTools &&
+      this.name in activeStreamingTools &&
+      activeStreamingTools[this.name].stream
+    ) {
+      inputStream = activeStreamingTools[this.name].stream;
+    }
+
+    // Call the execute function with tool context and optional input stream
+    // Note: For async generator functions, the signature may include input_stream
+    const executeWithStream = this.execute as (
+      input: unknown,
+      toolContext: ToolContext,
+      inputStream?: LiveRequestQueue,
+    ) => AsyncGenerator<unknown>;
+
+    const generator = executeWithStream(
+      validatedArgs as ToolExecuteArgument<TParameters>,
+      toolContext,
+      inputStream,
+    );
+
+    // Use Aclosing for proper cleanup of the async generator
+    const aclosing = new Aclosing(generator as AsyncGenerator<unknown>);
+    for await (const item of aclosing) {
+      yield item;
     }
   }
 }

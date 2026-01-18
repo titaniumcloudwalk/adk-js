@@ -6,6 +6,7 @@
 
 import {FunctionDeclaration, Tool} from '@google/genai';
 
+import {InvocationContext} from '../agents/invocation_context.js';
 import {LlmRequest} from '../models/llm_request.js';
 import {getGoogleLlmVariant} from '../utils/variant_utils.js';
 
@@ -17,6 +18,15 @@ import {ToolContext} from './tool_context.js';
 export interface RunAsyncToolRequest {
   args: Record<string, unknown>;
   toolContext: ToolContext;
+}
+
+/**
+ * The parameters for `_callLive` (streaming tool execution).
+ */
+export interface CallLiveToolRequest {
+  args: Record<string, unknown>;
+  toolContext: ToolContext;
+  invocationContext: InvocationContext;
 }
 
 /**
@@ -84,6 +94,27 @@ export abstract class BaseTool {
    * @return A promise that resolves to the tool response.
    */
   abstract runAsync(request: RunAsyncToolRequest): Promise<unknown>;
+
+  /**
+   * Executes the tool in live/streaming mode.
+   *
+   * This method is called for streaming tool execution in bidirectional
+   * streaming scenarios. It yields results as they become available.
+   *
+   * NOTE
+   * - Override this method to provide streaming tool execution.
+   * - Default implementation throws an error indicating the tool doesn't
+   *   support streaming.
+   *
+   * @param request The request to run the tool in live mode.
+   * @yields Results as they become available during streaming.
+   */
+  async *_callLive(request: CallLiveToolRequest): AsyncGenerator<unknown> {
+    throw new Error(
+      `Tool '${this.name}' does not support streaming execution. ` +
+      'Override _callLive() to enable streaming.',
+    );
+  }
 
   /**
    * Processes the outgoing LLM request for this tool.
