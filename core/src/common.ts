@@ -69,6 +69,8 @@ export {OAuth2CredentialRefresher} from './auth/refresher/oauth2_credential_refr
 export type {AuthorizationServerMetadata, ProtectedResourceMetadata} from './auth/oauth2_discovery.js';
 export {OAuth2DiscoveryManager} from './auth/oauth2_discovery.js';
 export {BuiltInCodeExecutor} from './code_executors/built_in_code_executor.js';
+export {AgentEngineSandboxCodeExecutor} from './code_executors/agent_engine_sandbox_code_executor.js';
+export type {AgentEngineSandboxCodeExecutorOptions} from './code_executors/agent_engine_sandbox_code_executor.js';
 export {createEvent, getFunctionCalls, getFunctionResponses, hasTrailingCodeExecutionResult, isFinalResponse, stringifyContent} from './events/event.js';
 export type {Event} from './events/event.js';
 export type {EventActions, EventCompaction} from './events/event_actions.js';
