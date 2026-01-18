@@ -59,6 +59,8 @@ export type {Event} from './events/event.js';
 export type {EventActions, EventCompaction} from './events/event_actions.js';
 export {createEventActions, createEventCompaction} from './events/event_actions.js';
 export {InMemoryMemoryService} from './memory/in_memory_memory_service.js';
+export {VertexAiMemoryBankService} from './memory/vertex_ai_memory_bank_service.js';
+export type {VertexAiMemoryBankServiceOptions} from './memory/vertex_ai_memory_bank_service.js';
 export {
   AnthropicLlm,
   Claude,
