@@ -45,6 +45,19 @@ type ToolExecuteFunction<
 ) => Promise<unknown> | unknown;
 
 /**
+ * A function that determines whether confirmation is required for a tool execution.
+ * @param args The arguments passed to the tool
+ * @param toolContext The tool context
+ * @returns true if confirmation is required, false otherwise
+ */
+export type RequireConfirmationFunction<
+  TParameters extends ToolInputParameters,
+> = (
+  args: ToolExecuteArgument<TParameters>,
+  toolContext: ToolContext,
+) => boolean | Promise<boolean>;
+
+/**
  * The configuration options for creating a function-based tool.
  * The `name`, `description` and `parameters` fields are used to generate the
  * tool definition that is passed to the LLM prompt.
@@ -60,6 +73,44 @@ export type ToolOptions<
   parameters?: TParameters;
   execute: ToolExecuteFunction<TParameters>;
   isLongRunning?: boolean;
+  /**
+   * Controls whether this tool requires user confirmation before execution.
+   *
+   * Can be either:
+   * - `true`: Always require confirmation before executing
+   * - `false`: Never require confirmation (default)
+   * - A function: Dynamically determine if confirmation is needed based on arguments
+   *
+   * When confirmation is required, the tool will:
+   * 1. Request confirmation via `toolContext.requestConfirmation()`
+   * 2. Return an error indicating confirmation is needed
+   * 3. Set `skipSummarization = true` to avoid summarizing the confirmation request
+   *
+   * On subsequent calls after user approval, the tool will execute normally.
+   * If the user rejects, the tool returns an error without executing.
+   *
+   * @example
+   * ```typescript
+   * // Static confirmation requirement
+   * const tool = new FunctionTool({
+   *   name: 'reimburse',
+   *   description: 'Reimburse an expense',
+   *   parameters: z.object({ amount: z.number() }),
+   *   execute: async (args) => { ... },
+   *   requireConfirmation: true
+   * });
+   *
+   * // Dynamic confirmation based on amount
+   * const tool = new FunctionTool({
+   *   name: 'transfer_money',
+   *   description: 'Transfer money between accounts',
+   *   parameters: z.object({ amount: z.number() }),
+   *   execute: async (args) => { ... },
+   *   requireConfirmation: (args) => args.amount > 1000
+   * });
+   * ```
+   */
+  requireConfirmation?: boolean | RequireConfirmationFunction<TParameters>;
 };
 
 function toSchema<TParameters extends ToolInputParameters>(
@@ -82,6 +133,8 @@ export class FunctionTool<
   private readonly execute: ToolExecuteFunction<TParameters>;
   // Typed input parameters.
   private readonly parameters?: TParameters;
+  // Confirmation requirement configuration.
+  private readonly requireConfirmation?: boolean | RequireConfirmationFunction<TParameters>;
 
   /**
    * The constructor acts as the user-friendly factory.
@@ -101,6 +154,7 @@ export class FunctionTool<
     });
     this.execute = options.execute;
     this.parameters = options.parameters;
+    this.requireConfirmation = options.requireConfirmation;
   }
 
   /**
@@ -123,6 +177,39 @@ export class FunctionTool<
       if (this.parameters instanceof ZodObject) {
         validatedArgs = this.parameters.parse(req.args);
       }
+
+      // Check if confirmation is required
+      let needsConfirmation = false;
+      if (typeof this.requireConfirmation === 'function') {
+        needsConfirmation = await this.requireConfirmation(
+          validatedArgs as ToolExecuteArgument<TParameters>,
+          req.toolContext,
+        );
+      } else if (this.requireConfirmation === true) {
+        needsConfirmation = true;
+      }
+
+      // Handle confirmation flow
+      if (needsConfirmation) {
+        if (!req.toolContext.toolConfirmation) {
+          // Request confirmation
+          req.toolContext.requestConfirmation({
+            hint: `Please approve or reject the tool call ${this.name}() by ` +
+                  'responding with a FunctionResponse with an expected ' +
+                  'ToolConfirmation payload.',
+          });
+          req.toolContext.actions.skipSummarization = true;
+          return {
+            error: 'This tool call requires confirmation, please approve or reject.',
+          };
+        } else if (!req.toolContext.toolConfirmation.confirmed) {
+          // Confirmation was rejected
+          return {error: 'This tool call is rejected.'};
+        }
+        // Confirmation was approved, proceed with execution
+      }
+
+      // Execute tool
       return await this.execute(
         validatedArgs as ToolExecuteArgument<TParameters>,
         req.toolContext,
