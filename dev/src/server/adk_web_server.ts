@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {BaseAgent, BaseArtifactService, BaseMemoryService, BaseSessionService, Event, getFunctionCalls, getFunctionResponses, InMemoryArtifactService, InMemoryMemoryService, InMemorySessionService, Runner, StreamingMode, maybeSetOtelProviders, getGcpExporters, getGcpResource} from '@google/adk';
+import {BaseAgent, BaseArtifactService, BaseMemoryService, BaseSessionService, createEvent, Event, getFunctionCalls, getFunctionResponses, InMemoryArtifactService, InMemoryMemoryService, InMemorySessionService, Runner, StreamingMode, maybeSetOtelProviders, getGcpExporters, getGcpResource} from '@google/adk';
 import cors from 'cors';
 import express, {Request, Response} from 'express';
 import * as http from 'http';
@@ -625,10 +625,20 @@ export class AdkWebServer {
 
         res.end();
       } catch (e: unknown) {
+        const errorMessage = (e as Error).message;
         if (res.headersSent) {
-          res.end(`data: ${JSON.stringify({error: (e as Error).message})}\n\n`);
+          // Yield a proper Event object for the error to maintain SSE format consistency
+          const errorEvent = createEvent({
+            author: 'system',
+            content: {
+              role: 'model',
+              parts: [{text: `Error: ${errorMessage}`}],
+            },
+            errorMessage,
+          });
+          res.end(`data: ${JSON.stringify(errorEvent)}\n\n`);
         } else {
-          res.status(500).json({error: (e as Error).message});
+          res.status(500).json({error: errorMessage});
         }
       }
     });
