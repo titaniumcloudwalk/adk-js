@@ -258,7 +258,8 @@ export interface LlmAgentConfig extends BaseAgentConfig {
    * The additional content generation configurations.
    *
    * NOTE: not all fields are usable, e.g. tools must be configured via
-   * `tools`, thinking_config must be configured via `planner` in LlmAgent.
+   * `tools`. The `thinkingConfig` can be configured here or via the `planner`.
+   * If both are set, the planner's configuration takes precedence.
    *
    * For example: use this config to adjust model temperature, configure safety
    * settings, etc.

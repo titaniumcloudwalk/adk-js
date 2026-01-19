@@ -79,6 +79,40 @@ describe('Planner Integration with LlmAgent', () => {
       expect(agent.planner).toBe(planner);
       expect(agent.generateContentConfig?.thinkingConfig).toBeDefined();
     });
+
+    it('should allow thinkingConfig directly in generateContentConfig without planner', () => {
+      // This test verifies the fix from Python PR #4117 that allows
+      // thinking_config to be set directly in generate_content_config
+      const agent = new LlmAgent({
+        name: 'test_agent',
+        model: 'gemini-2.5-pro',
+        generateContentConfig: {
+          thinkingConfig: {thinkingBudget: 8192},
+        },
+      });
+
+      // Should succeed without error
+      expect(agent.generateContentConfig?.thinkingConfig).toBeDefined();
+      expect(agent.generateContentConfig?.thinkingConfig?.thinkingBudget).toBe(8192);
+      expect(agent.planner).toBeUndefined();
+    });
+
+    it('should allow thinkingConfig with includeThoughts in generateContentConfig', () => {
+      // Test more thinkingConfig options
+      const agent = new LlmAgent({
+        name: 'test_agent',
+        model: 'gemini-2.5-flash',
+        generateContentConfig: {
+          thinkingConfig: {
+            thinkingBudget: 4096,
+            includeThoughts: true,
+          },
+        },
+      });
+
+      expect(agent.generateContentConfig?.thinkingConfig?.thinkingBudget).toBe(4096);
+      expect(agent.generateContentConfig?.thinkingConfig?.includeThoughts).toBe(true);
+    });
   });
 
   describe('BuiltInPlanner', () => {
