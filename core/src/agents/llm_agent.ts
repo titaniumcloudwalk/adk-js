@@ -201,6 +201,12 @@ export type ToolUnion = BaseTool|BaseToolset;
 
 const ADK_AGENT_NAME_LABEL_KEY = 'adk_agent_name';
 
+/**
+ * The built-in default model name used when no model is specified.
+ * This can be overridden via `LlmAgent.setDefaultModel()`.
+ */
+export const DEFAULT_MODEL = 'gemini-2.5-flash';
+
 export interface LlmAgentConfig extends BaseAgentConfig {
   /**
    * The model to use for the agent.
@@ -1493,11 +1499,73 @@ export class LlmAgent extends BaseAgent {
   private static globalInstructionDeprecationWarningShown = false;
 
   /**
+   * The class-level default model used when no model is specified.
+   * Can be changed via `LlmAgent.setDefaultModel()`.
+   */
+  private static _defaultModel: string | BaseLlm = DEFAULT_MODEL;
+
+  /**
    * Resets the globalInstruction deprecation warning flag.
    * @internal This method is for testing purposes only.
    */
   static resetDeprecationWarnings(): void {
     LlmAgent.globalInstructionDeprecationWarningShown = false;
+  }
+
+  /**
+   * Sets the default model used when an LlmAgent doesn't have a model specified
+   * and no ancestor provides one.
+   *
+   * This is useful for configuring a default model across your entire application.
+   *
+   * @param model The model name string or BaseLlm instance to use as default.
+   *
+   * @example
+   * ```typescript
+   * // Set default model to a specific model
+   * LlmAgent.setDefaultModel('gemini-2.5-pro');
+   *
+   * // Or use a configured model instance
+   * LlmAgent.setDefaultModel(new Gemini({ model: 'gemini-2.5-flash', apiKey: 'key' }));
+   *
+   * // Now agents without model specified will use the default
+   * const agent = new LlmAgent({
+   *   name: 'my-agent',
+   *   instruction: 'You are a helpful assistant.'
+   *   // model not specified - will use default
+   * });
+   * ```
+   */
+  static setDefaultModel(model: string | BaseLlm): void {
+    LlmAgent._defaultModel = model;
+  }
+
+  /**
+   * Gets the current default model.
+   * @returns The current default model string or BaseLlm instance.
+   */
+  static getDefaultModel(): string | BaseLlm {
+    return LlmAgent._defaultModel;
+  }
+
+  /**
+   * Resolves the default model to a BaseLlm instance.
+   * @internal
+   */
+  private static _resolveDefaultModel(): BaseLlm {
+    const defaultModel = LlmAgent._defaultModel;
+    if (isBaseLlm(defaultModel)) {
+      return defaultModel;
+    }
+    return LLMRegistry.newLlm(defaultModel);
+  }
+
+  /**
+   * Resets the default model to the built-in default (gemini-2.5-flash).
+   * @internal This method is for testing purposes only.
+   */
+  static resetDefaultModel(): void {
+    LlmAgent._defaultModel = DEFAULT_MODEL;
   }
 
   model?: string|BaseLlm;
@@ -1627,7 +1695,11 @@ export class LlmAgent extends BaseAgent {
   /**
    * The resolved BaseLlm instance.
    *
-   * When not set, the agent will inherit the model from its ancestor.
+   * Resolution order:
+   * 1. If this agent has a model set, use it
+   * 2. If an ancestor LlmAgent has a model, inherit from it
+   * 3. Fall back to the class-level default model (gemini-2.5-flash unless
+   *    overridden via `LlmAgent.setDefaultModel()`)
    */
   get canonicalModel(): BaseLlm {
     if (isBaseLlm(this.model)) {
@@ -1645,7 +1717,8 @@ export class LlmAgent extends BaseAgent {
       }
       ancestorAgent = ancestorAgent.parentAgent;
     }
-    throw new Error(`No model found for ${this.name}.`);
+    // Fall back to default model instead of throwing an error
+    return LlmAgent._resolveDefaultModel();
   }
 
   /**

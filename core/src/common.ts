@@ -49,7 +49,7 @@ export {AudioCacheManager} from './agents/audio_cache_manager.js';
 export type {AudioCacheConfig} from './agents/audio_cache_manager.js';
 export {AudioTranscriber, NoOpSpeechClient} from './agents/audio_transcriber.js';
 export type {SpeechClient, SpeechRecognitionConfig} from './agents/audio_transcriber.js';
-export {LlmAgent} from './agents/llm_agent.js';
+export {DEFAULT_MODEL, LlmAgent} from './agents/llm_agent.js';
 export type {AfterModelCallback, AfterToolCallback, BeforeModelCallback, BeforeToolCallback, OnModelErrorCallback, OnToolErrorCallback, SingleAfterModelCallback, SingleAfterToolCallback, SingleBeforeModelCallback, SingleBeforeToolCallback, SingleOnModelErrorCallback, SingleOnToolErrorCallback} from './agents/llm_agent.js';
 export {LoopAgent} from './agents/loop_agent.js';
 export {ParallelAgent} from './agents/parallel_agent.js';
