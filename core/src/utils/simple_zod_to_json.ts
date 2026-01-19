@@ -185,3 +185,46 @@ export function zodObjectToSchema(schema: ZodObject<any>): Schema {
     ...(schema._def.description ? {description: schema._def.description} : {}),
   };
 }
+
+/**
+ * Returns true if the given object is a Zod type (any Zod schema).
+ */
+export function isZodType(obj: unknown): obj is ZodTypeAny {
+  return (
+    obj !== null &&
+    typeof obj === 'object' &&
+    '_def' in obj &&
+    typeof (obj as any)._def === 'object' &&
+    'typeName' in (obj as any)._def
+  );
+}
+
+/**
+ * Converts any Zod type to a Google GenAI Schema.
+ * This is useful for specifying response schemas for streaming tools
+ * or other tool response types.
+ *
+ * @example
+ * ```typescript
+ * import { z } from 'zod';
+ * import { zodTypeToSchema } from './simple_zod_to_json';
+ *
+ * // Simple type
+ * const stringSchema = zodTypeToSchema(z.string());
+ * // { type: Type.STRING }
+ *
+ * // Array type
+ * const arraySchema = zodTypeToSchema(z.array(z.number()));
+ * // { type: Type.ARRAY, items: { type: Type.NUMBER } }
+ *
+ * // Object type
+ * const objSchema = zodTypeToSchema(z.object({ name: z.string() }));
+ * // { type: Type.OBJECT, properties: { name: { type: Type.STRING } }, required: ['name'] }
+ * ```
+ *
+ * @param zodType - Any Zod type to convert
+ * @returns A Google GenAI Schema representing the Zod type, or undefined if conversion fails
+ */
+export function zodTypeToSchema(zodType: ZodTypeAny): Schema | undefined {
+  return parseZodType(zodType);
+}

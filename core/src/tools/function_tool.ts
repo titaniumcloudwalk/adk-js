@@ -9,11 +9,12 @@ import {
   type infer as zInfer,
   ZodObject,
   type ZodRawShape,
+  type ZodTypeAny,
 } from 'zod';
 
 import {LiveRequestQueue} from '../agents/live_request_queue.js';
 import {Aclosing, isAsyncGeneratorFunction} from '../utils/async_generator_utils.js';
-import {isZodObject, zodObjectToSchema} from '../utils/simple_zod_to_json.js';
+import {isZodObject, isZodType, zodObjectToSchema, zodTypeToSchema} from '../utils/simple_zod_to_json.js';
 
 import {BaseTool, CallLiveToolRequest, RunAsyncToolRequest} from './base_tool.js';
 import {ToolContext} from './tool_context.js';
@@ -24,6 +25,29 @@ import {ToolContext} from './tool_context.js';
 export type ToolInputParameters =
   | undefined
   | ZodObject<ZodRawShape>
+  | Schema;
+
+/**
+ * Response schema type for the function tool.
+ * Can be a Zod schema (any type) or a raw Google GenAI Schema.
+ *
+ * For streaming tools (async generators), this represents the yield type,
+ * i.e., the type of each item yielded by the generator.
+ *
+ * @example
+ * ```typescript
+ * // Using Zod (recommended)
+ * response: z.string()  // Simple string response
+ * response: z.array(z.number())  // Array of numbers
+ * response: z.object({ result: z.string() })  // Object response
+ *
+ * // Using raw Schema
+ * response: { type: Type.STRING }  // Simple string
+ * response: { type: Type.ARRAY, items: { type: Type.NUMBER } }  // Array
+ * ```
+ */
+export type ToolResponseSchema =
+  | ZodTypeAny
   | Schema;
 
 /*
@@ -86,6 +110,47 @@ export type ToolOptions<
   name?: string;
   description: string;
   parameters?: TParameters;
+  /**
+   * Describes the output from this function in Schema format.
+   *
+   * For streaming tools (async generator functions), this represents the yield type,
+   * i.e., the type of each item yielded by the generator.
+   *
+   * Since TypeScript erases generic types at runtime (unlike Python which can
+   * introspect `AsyncGenerator[YieldType, SendType]` at runtime), you must explicitly
+   * specify the response schema if you want the LLM to know the expected output format.
+   *
+   * @example
+   * ```typescript
+   * // Streaming tool with string yield type
+   * const streamingTool = new FunctionTool({
+   *   name: 'streaming_search',
+   *   description: 'Streams search results',
+   *   parameters: z.object({ query: z.string() }),
+   *   response: z.string(),  // Specify yield type
+   *   execute: async function* (args) {
+   *     yield 'result 1';
+   *     yield 'result 2';
+   *   },
+   * });
+   *
+   * // Regular tool with structured response
+   * const regularTool = new FunctionTool({
+   *   name: 'get_weather',
+   *   description: 'Gets weather for a location',
+   *   parameters: z.object({ location: z.string() }),
+   *   response: z.object({
+   *     temperature: z.number(),
+   *     conditions: z.string(),
+   *   }),
+   *   execute: async (args) => ({
+   *     temperature: 72,
+   *     conditions: 'sunny',
+   *   }),
+   * });
+   * ```
+   */
+  response?: ToolResponseSchema;
   execute: ToolExecuteFunction<TParameters>;
   isLongRunning?: boolean;
   /**
@@ -141,6 +206,25 @@ function toSchema<TParameters extends ToolInputParameters>(
   return parameters;
 }
 
+/**
+ * Converts a response schema (Zod type or raw Schema) to a Google GenAI Schema.
+ * Returns undefined if no response schema is provided.
+ */
+function toResponseSchema(
+  response: ToolResponseSchema | undefined,
+): Schema | undefined {
+  if (response === undefined) {
+    return undefined;
+  }
+
+  if (isZodType(response)) {
+    return zodTypeToSchema(response);
+  }
+
+  // Raw Schema
+  return response;
+}
+
 export class FunctionTool<
   TParameters extends ToolInputParameters = undefined,
 > extends BaseTool {
@@ -148,6 +232,8 @@ export class FunctionTool<
   private readonly execute: ToolExecuteFunction<TParameters>;
   // Typed input parameters.
   private readonly parameters?: TParameters;
+  // Response schema for tool output.
+  private readonly response?: ToolResponseSchema;
   // Confirmation requirement configuration.
   private readonly requireConfirmation?: boolean | RequireConfirmationFunction<TParameters>;
 
@@ -169,17 +255,22 @@ export class FunctionTool<
     });
     this.execute = options.execute;
     this.parameters = options.parameters;
+    this.response = options.response;
     this.requireConfirmation = options.requireConfirmation;
   }
 
   /**
    * Provide a schema for the function.
+   * Includes the response schema if specified, which is particularly useful
+   * for streaming tools to describe the yield type.
    */
   override _getDeclaration(): FunctionDeclaration {
+    const responseSchema = toResponseSchema(this.response);
     return {
       name: this.name,
       description: this.description,
       parameters: toSchema(this.parameters),
+      ...(responseSchema && {response: responseSchema}),
     };
   }
 

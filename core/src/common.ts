@@ -208,7 +208,10 @@ export type {
   ToolboxToolsetOptions,
 } from './tools/toolbox_toolset.js';
 export {FunctionTool} from './tools/function_tool.js';
-export type {StreamingToolFunction} from './tools/function_tool.js';
+export type {
+  StreamingToolFunction,
+  ToolResponseSchema,
+} from './tools/function_tool.js';
 export {
   STOP_STREAMING_FUNCTION_NAME,
   StopStreamingTool,
@@ -261,7 +264,11 @@ export {
 } from './utils/async_generator_utils.js';
 export {logger, LogLevel, setLogLevel} from './utils/logger.js';
 export {isGemini2OrAbove} from './utils/model_name.js';
-export {zodObjectToSchema} from './utils/simple_zod_to_json.js';
+export {
+  zodObjectToSchema,
+  zodTypeToSchema,
+  isZodType,
+} from './utils/simple_zod_to_json.js';
 export {version} from './version.js';
 
 // OpenAPI tools
