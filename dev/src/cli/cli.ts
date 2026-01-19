@@ -9,7 +9,7 @@ import * as os from 'os';
 import * as path from 'path';
 import dotenv from 'dotenv';
 import {Command, Argument, Option} from 'commander';
-import {LogLevel, setLogLevel, BaseArtifactService, GcsArtifactService} from '@google/adk';
+import {LogLevel, setLogLevel, BaseArtifactService, GcsArtifactService, applyFeatureOverrides} from '@google/adk';
 import {AdkWebServer} from '../server/adk_web_server.js';
 import {runAgent} from './cli_run.js';
 import {deployToCloudRun, deployToAgentEngine, deployToGke} from './cli_deploy.js';
@@ -135,6 +135,24 @@ const TRACE_TO_CLOUD_OPTION = new Option(
     'Optional. Whether to enable cloud trace for telemetry.')
     .default(false);
 
+const ENABLE_FEATURES_OPTION = new Option(
+    '--enable_features <features...>',
+    'Optional. Comma-separated list of feature names to enable. ' +
+    'This provides an alternative to environment variables for enabling experimental features. ' +
+    'Example: --enable_features JSON_SCHEMA_FOR_FUNC_DECL,PROGRESSIVE_SSE_STREAMING');
+
+/**
+ * Apply feature overrides from CLI options.
+ *
+ * @param options The CLI options object.
+ */
+function maybeApplyFeatureOverrides(options: Record<string, unknown>): void {
+  const enableFeatures = options['enable_features'];
+  if (enableFeatures && Array.isArray(enableFeatures)) {
+    applyFeatureOverrides(enableFeatures as string[]);
+  }
+}
+
 program.command('web')
     .description('Start ADK web server')
     .addArgument(AGENT_DIR_ARGUMENT)
@@ -153,7 +171,9 @@ program.command('web')
     .addOption(URL_PREFIX_OPTION)
     .addOption(LOGO_TEXT_OPTION)
     .addOption(LOGO_IMAGE_URL_OPTION)
+    .addOption(ENABLE_FEATURES_OPTION)
     .action(async (agentsDir: string, options: Record<string, string>) => {
+      maybeApplyFeatureOverrides(options);
       setLogLevel(getLogLevelFromOptions(options));
 
       const absoluteAgentsDir = getAbsolutePath(agentsDir);
@@ -212,7 +232,9 @@ program.command('api_server')
     .addOption(TRACE_TO_CLOUD_OPTION)
     .addOption(A2A_OPTION)
     .addOption(URL_PREFIX_OPTION)
+    .addOption(ENABLE_FEATURES_OPTION)
     .action(async (agentsDir: string, options: Record<string, string>) => {
+      maybeApplyFeatureOverrides(options);
       setLogLevel(getLogLevelFromOptions(options));
 
       const absoluteAgentsDir = getAbsolutePath(agentsDir);
@@ -302,7 +324,9 @@ program.command('run')
     .addOption(ARTIFACT_SERVICE_URI_OPTION)
     .addOption(SESSION_SERVICE_URI_OPTION)
     .addOption(USE_LOCAL_STORAGE_OPTION)
+    .addOption(ENABLE_FEATURES_OPTION)
     .action(async (agentPath: string, options: Record<string, string>) => {
+      maybeApplyFeatureOverrides(options);
       setLogLevel(getLogLevelFromOptions(options));
 
       const baseDir = path.dirname(getAbsolutePath(agentPath));
@@ -537,7 +561,9 @@ program.command('eval')
     .addOption(EVAL_STORAGE_URI_OPTION)
     .addOption(VERBOSE_OPTION)
     .addOption(LOG_LEVEL_OPTION)
+    .addOption(ENABLE_FEATURES_OPTION)
     .action(async (agentPath: string, evalSets: string[], options: Record<string, string | boolean>) => {
+      maybeApplyFeatureOverrides(options as Record<string, unknown>);
       setLogLevel(getLogLevelFromOptions(options as {verbose?: boolean; log_level?: string}));
 
       const exitCode = await runEvaluation({
