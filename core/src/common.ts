@@ -227,6 +227,12 @@ export {
   GOOGLE_MAPS_GROUNDING,
   GoogleMapsGroundingTool,
 } from './tools/google_maps_grounding_tool.js';
+export {URL_CONTEXT, UrlContextTool} from './tools/url_context_tool.js';
+export {exitLoop} from './tools/exit_loop_tool.js';
+export {
+  transferToAgent,
+  TransferToAgentTool,
+} from './tools/transfer_to_agent_tool.js';
 export {LongRunningFunctionTool} from './tools/long_running_tool.js';
 export {LoadMemoryTool, loadMemoryTool} from './tools/load_memory_tool.js';
 export type {LoadMemoryResponse} from './tools/load_memory_tool.js';
