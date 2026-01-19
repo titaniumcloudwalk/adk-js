@@ -512,6 +512,17 @@ export class RemoteA2aAgent extends BaseAgent {
           });
         }
 
+        // For streaming task, mark all parts as thought for working/submitted states
+        const taskState = task.status?.state?.toLowerCase();
+        if (
+          (taskState === 'submitted' || taskState === 'working') &&
+          event.content?.parts
+        ) {
+          for (const part of event.content.parts) {
+            part.thought = true;
+          }
+        }
+
         // Add task metadata
         event.customMetadata = event.customMetadata ?? {};
         event.customMetadata[A2A_METADATA_PREFIX + 'task_id'] = task.id;
