@@ -120,6 +120,18 @@ export class AgentEvaluator {
       // Generate actual invocations by running the agent
       const actualInvocations = await this.generateInvocations(evalCase);
 
+      // Handle case where no invocations were generated (agent failure)
+      if (!actualInvocations || actualInvocations.length === 0) {
+        logger.error(
+          `Evaluation attempted on failed inference for eval case \`${evalCase.evalId}\`. ` +
+            'No invocations were generated.'
+        );
+        return this.buildNotEvaluatedResult(
+          evalCase.evalId,
+          'Failed inference: no invocations were generated'
+        );
+      }
+
       // Get expected invocations (if static conversation)
       const expectedInvocations = evalCase.conversation;
 
@@ -188,14 +200,41 @@ export class AgentEvaluator {
       );
     } catch (error) {
       logger.error(`Error running eval case ${evalCase.evalId}: ${error}`);
-      return {
-        evalCaseId: evalCase.evalId,
-        overallEvalMetricResults: [],
-        evalMetricResultPerInvocation: [],
-        creationTimestamp: Date.now(),
-        errorMessage: `Case execution error: ${error}`,
-      };
+      return this.buildNotEvaluatedResult(
+        evalCase.evalId,
+        `Case execution error: ${error}`
+      );
     }
+  }
+
+  /**
+   * Builds an EvalCaseResult for cases that could not be evaluated.
+   *
+   * @param evalCaseId - The ID of the eval case
+   * @param errorMessage - Description of why evaluation failed
+   * @returns An EvalCaseResult with NOT_EVALUATED status
+   */
+  private buildNotEvaluatedResult(
+    evalCaseId: string,
+    errorMessage: string
+  ): EvalCaseResult {
+    // Create NOT_EVALUATED results for each configured metric
+    const overallResults: EvalMetricResult[] = this.evalConfig.metrics.map(
+      (metric) => ({
+        metricName: metric.metricName,
+        evalStatus: EvalStatus.NOT_EVALUATED,
+        threshold: metric.threshold,
+        errorMessage,
+      })
+    );
+
+    return {
+      evalCaseId,
+      overallEvalMetricResults: overallResults,
+      evalMetricResultPerInvocation: [],
+      creationTimestamp: Date.now(),
+      errorMessage,
+    };
   }
 
   /**
