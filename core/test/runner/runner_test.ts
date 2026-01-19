@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {BaseAgent, BasePlugin, createEvent, createSession, Event, InMemoryArtifactService, InMemorySessionService, InvocationContext, LlmAgent, Runner} from '@google/adk';
+import {BaseAgent, BasePlugin, createEvent, createSession, Event, FunctionTool, InMemoryArtifactService, InMemorySessionService, InvocationContext, LiveRequestQueue, LlmAgent, Runner, ToolContext} from '@google/adk';
 import {Content, FunctionCall, FunctionResponse, Part} from '@google/genai';
 
 const TEST_APP_ID = 'test_app_id';
@@ -708,5 +708,193 @@ describe('Runner.autoCreateSession', () => {
     });
     expect(session).not.toBeNull();
     expect(session?.id).toBe(newSessionId);
+  });
+});
+
+/**
+ * Streaming tools agent for testing runLive detection.
+ *
+ * This captures invocation context to verify streaming tools are properly
+ * registered using canonical_tools and tool.name (fixes ec6abf40).
+ */
+class StreamingToolsAgent extends LlmAgent {
+  capturedContext: InvocationContext | null = null;
+
+  constructor(
+    name: string,
+    tools: (FunctionTool | ((...args: unknown[]) => unknown))[] = [],
+  ) {
+    super({
+      name,
+      model: 'gemini-2.0-flash',
+      tools,
+    });
+  }
+
+  protected override async *runLiveImpl(
+    invocationContext: InvocationContext,
+  ): AsyncGenerator<Event, void, void> {
+    // Capture the context for verification
+    this.capturedContext = invocationContext;
+    yield createEvent({
+      invocationId: invocationContext.invocationId,
+      author: this.name,
+      content: {role: 'model', parts: [{text: 'streaming test'}]},
+    });
+  }
+}
+
+describe('Runner.runLive streaming tools detection', () => {
+  let sessionService: InMemorySessionService;
+  let artifactService: InMemoryArtifactService;
+
+  beforeEach(() => {
+    sessionService = new InMemorySessionService();
+    artifactService = new InMemoryArtifactService();
+  });
+
+  it('should detect streaming tools using canonical_tools and tool.name', async () => {
+    // Define a streaming tool function (async generator) wrapped in FunctionTool
+    async function* streamingToolExecute(
+      _args: {query: string},
+      _toolContext: ToolContext,
+    ): AsyncGenerator<string, void, void> {
+      yield 'streaming result 1';
+      yield 'streaming result 2';
+    }
+    const streamingTool = new FunctionTool({
+      name: 'streamingToolFn',
+      description: 'A streaming tool for testing',
+      execute: streamingToolExecute,
+    });
+
+    // Use single tool to avoid triggering canonicalModel access
+    // (canonicalModel is only accessed when hasMultipleTools is true)
+    const agent = new StreamingToolsAgent('streaming_agent', [
+      streamingTool, // Streaming FunctionTool
+    ]);
+
+    const runner = new Runner({
+      appName: TEST_APP_ID,
+      agent,
+      sessionService,
+      artifactService,
+      autoCreateSession: true,
+    });
+
+    const liveQueue = new LiveRequestQueue();
+
+    const events: Event[] = [];
+    const agen = runner.runLive({
+      userId: TEST_USER_ID,
+      sessionId: TEST_SESSION_ID,
+      liveRequestQueue: liveQueue,
+    });
+
+    // Get the first event
+    const result = await agen.next();
+    if (!result.done) {
+      events.push(result.value);
+    }
+    // Close the generator
+    await agen.return(undefined as unknown as void);
+
+    // Verify the agent responded
+    expect(events.length).toBeGreaterThan(0);
+    expect(events[0].author).toBe('streaming_agent');
+
+    // Verify streaming tool was detected correctly via canonical_tools using tool.name
+    const activeTools = agent.capturedContext?.activeStreamingTools ?? {};
+
+    // Streaming FunctionTool should be detected (using tool.name, not __name__)
+    expect('streamingToolFn' in activeTools).toBe(true);
+  });
+
+  it('should NOT detect non-streaming tools as streaming', async () => {
+    // Define a non-streaming tool (should NOT be detected)
+    function nonStreamingToolExecute(_args: {param: string}, _toolContext: ToolContext): string {
+      return 'regular result';
+    }
+    const nonStreamingTool = new FunctionTool({
+      name: 'nonStreamingToolFn',
+      description: 'A non-streaming tool for testing',
+      execute: nonStreamingToolExecute,
+    });
+
+    const agent = new StreamingToolsAgent('non_streaming_agent', [
+      nonStreamingTool, // Non-streaming FunctionTool
+    ]);
+
+    const runner = new Runner({
+      appName: TEST_APP_ID,
+      agent,
+      sessionService,
+      artifactService,
+      autoCreateSession: true,
+    });
+
+    const liveQueue = new LiveRequestQueue();
+
+    const agen = runner.runLive({
+      userId: TEST_USER_ID,
+      sessionId: 'non_streaming_session',
+      liveRequestQueue: liveQueue,
+    });
+
+    // Get the first event
+    await agen.next();
+    // Close the generator
+    await agen.return(undefined as unknown as void);
+
+    // Verify non-streaming tools were NOT detected
+    const activeTools = agent.capturedContext?.activeStreamingTools ?? {};
+    expect('nonStreamingToolFn' in activeTools).toBe(false);
+  });
+
+  it('should register LiveRequestQueue stream for streaming tools', async () => {
+    // Define a streaming tool
+    async function* streamingToolExecute(
+      _args: {query: string},
+      _toolContext: ToolContext,
+    ): AsyncGenerator<string, void, void> {
+      yield 'result';
+    }
+    const streamingTool = new FunctionTool({
+      name: 'streamingToolFn',
+      description: 'A streaming tool for LiveRequestQueue testing',
+      execute: streamingToolExecute,
+    });
+
+    const agent = new StreamingToolsAgent('stream_queue_agent', [
+      streamingTool,
+    ]);
+
+    const runner = new Runner({
+      appName: TEST_APP_ID,
+      agent,
+      sessionService,
+      artifactService,
+      autoCreateSession: true,
+    });
+
+    const liveQueue = new LiveRequestQueue();
+
+    const agen = runner.runLive({
+      userId: TEST_USER_ID,
+      sessionId: 'stream_queue_session',
+      liveRequestQueue: liveQueue,
+    });
+
+    // Get the first event
+    await agen.next();
+    await agen.return(undefined as unknown as void);
+
+    // Verify the streaming tool has a LiveRequestQueue stream registered
+    const activeTools = agent.capturedContext?.activeStreamingTools ?? {};
+    expect('streamingToolFn' in activeTools).toBe(true);
+
+    const streamingToolEntry = activeTools['streamingToolFn'];
+    expect(streamingToolEntry).toBeDefined();
+    expect(streamingToolEntry.stream).toBeInstanceOf(LiveRequestQueue);
   });
 });

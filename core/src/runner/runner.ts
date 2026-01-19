@@ -7,10 +7,13 @@
 import {Content, createPartFromText, Modality} from '@google/genai';
 import {trace} from '@opentelemetry/api';
 
+import {ActiveStreamingTool} from '../agents/active_streaming_tool.js';
 import {BaseAgent} from '../agents/base_agent.js';
 import {InvocationContext, newInvocationContextId} from '../agents/invocation_context.js';
+import {ReadonlyContext} from '../agents/readonly_context.js';
 import {LiveRequestQueue} from '../agents/live_request_queue.js';
 import {LlmAgent} from '../agents/llm_agent.js';
+import {FunctionTool} from '../tools/function_tool.js';
 import {createRunConfig, RunConfig} from '../agents/run_config.js';
 import {BaseArtifactService} from '../artifacts/base_artifact_service.js';
 import {BaseCredentialService} from '../auth/credential_service/base_credential_service.js';
@@ -454,18 +457,25 @@ export class Runner {
       invocationContext.activeStreamingTools = {};
 
       // For shell agents, there is no canonical_tools method so we should skip.
+      // Use canonical_tools to get properly wrapped BaseTool instances (fixes #ec6abf40).
       if (
         'canonicalTools' in invocationContext.agent &&
         invocationContext.agent instanceof LlmAgent
       ) {
-        const tools = await (invocationContext.agent as LlmAgent).canonicalTools();
-        for (const tool of tools) {
-          // Check if the tool has streaming capabilities
-          // This is a simplified check - in a full implementation we would
-          // inspect the tool's function signature for LiveRequestQueue parameters
-          if (tool.isLongRunning) {
-            // Mark as a potential streaming tool
-            logger.debug(`Found potential streaming tool: ${tool.name}`);
+        const canonicalTools = await (invocationContext.agent as LlmAgent).canonicalTools(
+          new ReadonlyContext(invocationContext)
+        );
+        for (const tool of canonicalTools) {
+          // Check if the tool is a FunctionTool with streaming capabilities.
+          // FunctionTool.isStreamingFunction checks if the underlying function
+          // is an async generator that yields results progressively.
+          if (tool instanceof FunctionTool && tool.isStreamingFunction) {
+            // Register the streaming tool with its LiveRequestQueue for input stream
+            logger.debug(`Register streaming tool with input stream: ${tool.name}`);
+            const activeStreamingTool = new ActiveStreamingTool({
+              stream: new LiveRequestQueue(),
+            });
+            invocationContext.activeStreamingTools[tool.name] = activeStreamingTool;
           }
         }
       }
