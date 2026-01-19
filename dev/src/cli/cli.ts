@@ -29,6 +29,7 @@ import {
   deleteEvalSetCommand,
 } from './cli_eval.js';
 import {runConformanceRecord, runConformanceTest} from './conformance/index.js';
+import {runMigrateSession} from './cli_migrate.js';
 
 dotenv.config();
 
@@ -668,6 +669,55 @@ CONFORMANCE_COMMAND.command('test')
       const absolutePaths = paths.map(p => getAbsolutePath(p));
       const mode = options['mode'] as 'replay' | 'live';
       const exitCode = await runConformanceTest(absolutePaths, mode);
+      process.exit(exitCode);
+    });
+
+// Migration commands
+const MIGRATE_COMMAND = program.command('migrate')
+    .description('Migrate data between different storage backends')
+    .allowUnknownOption()
+    .allowExcessArguments();
+
+MIGRATE_COMMAND.command('session')
+    .description('Migrate session data from one storage backend to another')
+    .requiredOption(
+        '--source_uri <string>',
+        'Source session service URI (e.g., sqlite:///old.db, agentengine://<resource>)')
+    .requiredOption(
+        '--dest_uri <string>',
+        'Destination session service URI (e.g., sqlite:///new.db, agentengine://<resource>)')
+    .requiredOption(
+        '--app_name <string>',
+        'App name to filter sessions')
+    .requiredOption(
+        '--user_id <string>',
+        'User ID to filter sessions')
+    .option(
+        '--skip_existing [boolean]',
+        'Skip sessions that already exist in destination (default: true)',
+        true)
+    .option(
+        '--limit <number>',
+        'Maximum number of sessions to migrate (useful for testing)')
+    .option(
+        '--dry_run [boolean]',
+        'Run in dry-run mode without making any writes',
+        false)
+    .addOption(VERBOSE_OPTION)
+    .addOption(LOG_LEVEL_OPTION)
+    .action(async (options: Record<string, string | boolean>) => {
+      setLogLevel(getLogLevelFromOptions(options as {verbose?: boolean; log_level?: string}));
+
+      const exitCode = await runMigrateSession({
+        source_uri: options['source_uri'] as string,
+        dest_uri: options['dest_uri'] as string,
+        app_name: options['app_name'] as string,
+        user_id: options['user_id'] as string,
+        skip_existing: options['skip_existing'] !== false,
+        limit: options['limit'] as string | undefined,
+        dry_run: !!options['dry_run'],
+      });
+
       process.exit(exitCode);
     });
 
