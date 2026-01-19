@@ -14,6 +14,7 @@
 	"dependencies": {
 		"@google/adk": "file:../../../../core",
 		"@google/adk-devtools": "file:../../../../dev",
-		"@google/genai": "^1.37.0"
+		"@google/genai": "^1.37.0",
+		"@opentelemetry/api": "1.9.0"
 	}
 }

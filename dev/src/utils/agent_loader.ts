@@ -95,7 +95,32 @@ export class AgentFile {
         allowOverwrite: true,
         // Mark optional peer dependencies as external to avoid bundling issues
         // when they are not installed. These are dynamically imported at runtime.
-        external: ['litellm'],
+        // Note: @opentelemetry/api is NOT external because it's eagerly imported
+        // by base_agent.ts and runner.ts, and must be bundled with the agent.
+        external: [
+          'litellm',
+          '@anthropic-ai/sdk',
+          '@google-cloud/bigquery',
+          '@google-cloud/pubsub',
+          '@google-cloud/spanner',
+          '@google-cloud/storage',
+          '@google-cloud/opentelemetry-cloud-monitoring-exporter',
+          '@google-cloud/opentelemetry-cloud-trace-exporter',
+          '@kubernetes/client-node',
+          // OpenTelemetry setup packages (lazily imported in telemetry/setup.ts)
+          '@opentelemetry/api-logs',
+          '@opentelemetry/exporter-logs-otlp-http',
+          '@opentelemetry/exporter-metrics-otlp-http',
+          '@opentelemetry/exporter-trace-otlp-http',
+          '@opentelemetry/resource-detector-gcp',
+          '@opentelemetry/resources',
+          '@opentelemetry/sdk-logs',
+          '@opentelemetry/sdk-metrics',
+          '@opentelemetry/sdk-trace-base',
+          '@opentelemetry/sdk-trace-node',
+          'better-sqlite3',
+          'dockerode',
+        ],
       });
 
       this.cleanupFilePath = compiledFilePath;

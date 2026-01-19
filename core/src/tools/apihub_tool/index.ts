@@ -27,13 +27,11 @@
  * ```
  */
 
-export {
-  APIHubToolset,
-  APIHubToolsetOptions,
-} from './apihub_toolset.js';
+export {APIHubToolset} from './apihub_toolset.js';
+export type {APIHubToolsetOptions} from './apihub_toolset.js';
 
-export {
-  APIHubClient,
+export {APIHubClient} from './clients/apihub_client.js';
+export type {
   APIHubClientOptions,
   BaseAPIHubClient,
 } from './clients/apihub_client.js';
