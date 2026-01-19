@@ -4,12 +4,28 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {BaseAgent, isBaseAgent} from '@google/adk';
+import {BaseAgent, ComputerUseToolset, isBaseAgent, LlmAgent} from '@google/adk';
 import esbuild from 'esbuild';
 import * as fsPromises from 'node:fs/promises';
 import * as path from 'node:path';
 
 import {getTempDir, isFile} from './file_utils.js';
+
+/**
+ * Detailed information about an agent/app.
+ */
+export interface AppInfo {
+  /** The name of the agent (directory or file name). */
+  name: string;
+  /** The name of the root agent instance. */
+  rootAgentName: string;
+  /** Description of the agent. */
+  description: string;
+  /** The language used to define the agent. */
+  language: 'typescript' | 'javascript';
+  /** Whether the agent uses computer use toolset. */
+  isComputerUse: boolean;
+}
 
 const JS_FILES_EXTENSIONST_TO_COMPILE = ['.ts', '.mts'];
 const JS_FILES_EXTENSIONS = ['.js', '.cjs', '.mjs', '.ts', '.mts'];
@@ -226,6 +242,53 @@ export class AgentLoader {
     await this.preloadAgents();
 
     return Object.keys(this.preloadedAgents).sort();
+  }
+
+  /**
+   * Lists all agents with detailed information including root agent name,
+   * description, language, and whether the agent uses computer use toolset.
+   */
+  async listAgentsDetailed(): Promise<AppInfo[]> {
+    await this.preloadAgents();
+
+    const appsInfo: AppInfo[] = [];
+    for (const [agentName, agentFile] of Object.entries(this.preloadedAgents)) {
+      const agent = await agentFile.load();
+      const language = this.determineAgentLanguage(agentFile);
+      const isComputerUse = this.detectComputerUse(agent);
+
+      appsInfo.push({
+        name: agentName,
+        rootAgentName: agent.name,
+        description: agent.description ?? '',
+        language,
+        isComputerUse,
+      });
+    }
+
+    return appsInfo.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /**
+   * Determines whether the agent uses ComputerUseToolset.
+   */
+  private detectComputerUse(agent: BaseAgent): boolean {
+    if (!(agent instanceof LlmAgent)) {
+      return false;
+    }
+
+    return agent.tools.some((tool) => tool instanceof ComputerUseToolset);
+  }
+
+  /**
+   * Determines the language of the agent file (typescript or javascript).
+   */
+  private determineAgentLanguage(
+    agentFile: AgentFile,
+  ): 'typescript' | 'javascript' {
+    const filePath = agentFile.getFilePath();
+    const ext = path.extname(filePath);
+    return ['.ts', '.mts'].includes(ext) ? 'typescript' : 'javascript';
   }
 
   async getAgentFile(agentName: string): Promise<AgentFile> {

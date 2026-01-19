@@ -242,5 +242,44 @@ describe('AgentLoader', () => {
       expect(agent.name).toBe('agent1');
       await loader.disposeAll();
     });
+
+    it('lists agents with detailed information', async () => {
+      // Reset isFile mock in case previous tests set it
+      (fileUtils.isFile as Mock).mockReturnValue(false);
+      const agentLoader = new AgentLoader(tempAgentsDir);
+      const appsInfo = await agentLoader.listAgentsDetailed();
+
+      expect(appsInfo).toHaveLength(3);
+      expect(appsInfo.map((a) => a.name)).toEqual([
+        'agent1',
+        'agent2',
+        'agent3',
+      ]);
+
+      // Check agent1 (JavaScript file)
+      const agent1Info = appsInfo.find((a) => a.name === 'agent1');
+      expect(agent1Info).toBeDefined();
+      expect(agent1Info!.rootAgentName).toBe('agent1');
+      expect(agent1Info!.language).toBe('javascript');
+      expect(agent1Info!.isComputerUse).toBe(false);
+      expect(agent1Info!.description).toBe('');
+
+      // Check agent2 (TypeScript file - compiled to .cjs)
+      const agent2Info = appsInfo.find((a) => a.name === 'agent2');
+      expect(agent2Info).toBeDefined();
+      expect(agent2Info!.rootAgentName).toBe('agent2');
+      // After compilation, getFilePath returns the .cjs file
+      expect(agent2Info!.language).toBe('javascript');
+      expect(agent2Info!.isComputerUse).toBe(false);
+
+      // Check agent3 (directory-based agent)
+      const agent3Info = appsInfo.find((a) => a.name === 'agent3');
+      expect(agent3Info).toBeDefined();
+      expect(agent3Info!.rootAgentName).toBe('agent3');
+      expect(agent3Info!.language).toBe('javascript');
+      expect(agent3Info!.isComputerUse).toBe(false);
+
+      await agentLoader.disposeAll();
+    });
   });
 });

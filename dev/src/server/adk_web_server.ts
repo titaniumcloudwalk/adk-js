@@ -155,7 +155,7 @@ export class AdkWebServer {
 
     app.get(this.buildPath('/list-apps'), async (req: Request, res: Response) => {
       try {
-        const apps = await this.agentLoader.listAgents();
+        const apps = await this.agentLoader.listAgentsDetailed();
 
         res.json(apps);
       } catch (e: unknown) {
