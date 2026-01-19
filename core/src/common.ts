@@ -237,6 +237,7 @@ export {
   TransferToAgentTool,
 } from './tools/transfer_to_agent_tool.js';
 export {LongRunningFunctionTool} from './tools/long_running_tool.js';
+export {LoadArtifactsTool, loadArtifactsTool} from './tools/load_artifacts_tool.js';
 export {LoadMemoryTool, loadMemoryTool} from './tools/load_memory_tool.js';
 export type {LoadMemoryResponse} from './tools/load_memory_tool.js';
 export {extractText as extractMemoryText} from './tools/memory_entry_utils.js';
