@@ -136,6 +136,7 @@ describe('AgentLoader', () => {
         bundle: true,
         minify: true,
         allowOverwrite: true,
+        external: ['litellm'],
       });
 
       await agentFile.dispose();

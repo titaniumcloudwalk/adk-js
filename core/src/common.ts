@@ -477,33 +477,35 @@ export type {
 } from './agents/config/index.js';
 
 // Computer Use Tools
-export {
-  BaseComputer,
-  ComputerEnvironment,
-  ComputerState,
-  EXCLUDED_COMPUTER_METHODS,
-  ComputerUseTool,
-  ComputerUseToolset,
-} from './tools/computer_use/index.js';
 export type {
+  BaseComputer,
+  ComputerState,
   ScrollDirection,
   ComputerUseToolOptions,
   ComputerUseToolsetOptions,
 } from './tools/computer_use/index.js';
+export {
+  ComputerEnvironment,
+  EXCLUDED_COMPUTER_METHODS,
+  ComputerUseTool,
+  ComputerUseToolset,
+} from './tools/computer_use/index.js';
 
 // Evaluation Framework
-export {
-  // Core types
+export type {
   EvalCase,
   Invocation,
+  EvalSet,
+} from './evaluation/index.js';
+export {
+  // Core functions
   createInvocation,
   createEvalCase,
   createEvalCaseWithScenario,
   getToolCalls,
   getToolNames,
   getTextFromContent,
-  // Eval set
-  EvalSet,
+  // Eval set functions
   createEvalSet,
   addEvalCaseToSet,
   removeEvalCaseFromSet,

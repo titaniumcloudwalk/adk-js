@@ -61,18 +61,16 @@
 export {SpannerToolset} from './spanner_toolset.js';
 export type {SpannerToolsetOptions} from './spanner_toolset.js';
 
-export {
-  Capabilities,
+export {Capabilities, QueryResultMode, validateSpannerToolSettings} from './config.js';
+export type {
   DistanceType,
   NearestNeighborsAlgorithm,
-  QueryResultMode,
   SpannerToolSettings,
   SpannerVectorStoreSettings,
   TableColumn,
   VectorSearchIndexSettings,
   SearchOptions,
   EmbeddingOptions,
-  validateSpannerToolSettings,
 } from './config.js';
 
 export {
@@ -81,8 +79,8 @@ export {
   DEFAULT_SPANNER_SCOPES,
   getSpannerScopes,
   SPANNER_TOKEN_CACHE_KEY,
-  SpannerCredentialsConfig,
 } from './credentials.js';
+export type {SpannerCredentialsConfig} from './credentials.js';
 
 export {getSpannerUserAgent} from './client.js';
 export type {

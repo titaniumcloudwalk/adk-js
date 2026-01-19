@@ -46,15 +46,15 @@
 export {BigQueryToolset} from './bigquery_toolset.js';
 export type {BigQueryToolsetOptions} from './bigquery_toolset.js';
 
+export type {BigQueryToolConfig} from './config.js';
 export {
-  BigQueryToolConfig,
   MINIMUM_BYTES_BILLED,
   validateBigQueryToolConfig,
   WriteMode,
 } from './config.js';
 
+export type {BigQueryCredentialsConfig} from './credentials.js';
 export {
-  BigQueryCredentialsConfig,
   DEFAULT_BIGQUERY_SCOPE,
   getBigQueryScopes,
 } from './credentials.js';

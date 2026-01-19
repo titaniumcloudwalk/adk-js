@@ -48,20 +48,19 @@
  * @module
  */
 
-export {
+export type {
   BaseComputer,
-  ComputerEnvironment,
   ComputerState,
   ScrollDirection,
-  EXCLUDED_COMPUTER_METHODS,
 } from './base_computer.js';
 
 export {
-  ComputerUseTool,
-  ComputerUseToolOptions,
-} from './computer_use_tool.js';
+  ComputerEnvironment,
+  EXCLUDED_COMPUTER_METHODS,
+} from './base_computer.js';
 
-export {
-  ComputerUseToolset,
-  ComputerUseToolsetOptions,
-} from './computer_use_toolset.js';
+export type {ComputerUseToolOptions} from './computer_use_tool.js';
+export {ComputerUseTool} from './computer_use_tool.js';
+
+export type {ComputerUseToolsetOptions} from './computer_use_toolset.js';
+export {ComputerUseToolset} from './computer_use_toolset.js';

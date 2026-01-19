@@ -93,6 +93,9 @@ export class AgentFile {
         bundle: true,
         minify: true,
         allowOverwrite: true,
+        // Mark optional peer dependencies as external to avoid bundling issues
+        // when they are not installed. These are dynamically imported at runtime.
+        external: ['litellm'],
       });
 
       this.cleanupFilePath = compiledFilePath;

@@ -5,14 +5,17 @@
  */
 
 // Common config types
-export {
+export type {
   ArgumentConfig,
-  ArgumentConfigSchema,
   CodeConfig,
-  CodeConfigSchema,
   AgentRefConfig,
-  AgentRefConfigSchema,
   ToolConfig,
+} from './common_configs.js';
+
+export {
+  ArgumentConfigSchema,
+  CodeConfigSchema,
+  AgentRefConfigSchema,
   ToolConfigSchema,
   argsToRecord,
   isClass,
@@ -20,18 +23,21 @@ export {
 } from './common_configs.js';
 
 // Agent config schemas
-export {
+export type {
   BaseAgentConfigYaml,
-  BaseAgentConfigYamlSchema,
   LlmAgentConfigYaml,
-  LlmAgentConfigYamlSchema,
   LoopAgentConfigYaml,
-  LoopAgentConfigYamlSchema,
   ParallelAgentConfigYaml,
-  ParallelAgentConfigYamlSchema,
   SequentialAgentConfigYaml,
-  SequentialAgentConfigYamlSchema,
   AgentConfigYaml,
+} from './agent_config_schemas.js';
+
+export {
+  BaseAgentConfigYamlSchema,
+  LlmAgentConfigYamlSchema,
+  LoopAgentConfigYamlSchema,
+  ParallelAgentConfigYamlSchema,
+  SequentialAgentConfigYamlSchema,
   AGENT_CONFIG_SCHEMAS,
   ADK_AGENT_CLASSES,
   getAgentClassFromConfig,
