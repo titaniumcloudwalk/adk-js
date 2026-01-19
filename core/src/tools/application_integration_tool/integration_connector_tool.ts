@@ -8,6 +8,7 @@ import {FunctionDeclaration, Schema, Type} from '@google/genai';
 
 import {AuthCredential} from '../../auth/auth_credential.js';
 import {AuthScheme} from '../../auth/auth_schemes.js';
+import {FeatureName, isFeatureEnabled} from '../../features/feature_registry.js';
 import {logger} from '../../utils/logger.js';
 import {BaseTool, RunAsyncToolRequest} from '../base_tool.js';
 import {RestApiTool} from '../openapi/rest_api_tool.js';
@@ -111,28 +112,38 @@ export class IntegrationConnectorTool extends BaseTool {
   /**
    * Returns the function declaration in the Gemini Schema format.
    * Filters out internal fields that are auto-populated.
+   * If JSON_SCHEMA_FOR_FUNC_DECL feature is enabled, uses parametersJsonSchema
+   * instead of converting to Gemini Schema format.
    */
   override _getDeclaration(): FunctionDeclaration {
-    // Get the base schema from the RestApiTool's operation parser
-    const baseDeclaration = this.restApiTool._getDeclaration();
-    const schemaDict = baseDeclaration.parameters as Record<string, unknown>;
+    // Get the JSON schema from the RestApiTool's operation parser
+    const schemaDict = this.restApiTool.operationParser.getJsonSchema();
 
     // Clone the schema to avoid modifying the original
-    const filteredSchema = JSON.parse(JSON.stringify(schemaDict));
+    const filteredSchema = JSON.parse(JSON.stringify(schemaDict)) as Record<string, unknown>;
 
     // Remove excluded fields from properties
-    if (filteredSchema.properties) {
+    if (filteredSchema.properties && typeof filteredSchema.properties === 'object') {
+      const properties = filteredSchema.properties as Record<string, unknown>;
       for (const field of EXCLUDE_FIELDS) {
-        delete filteredSchema.properties[field];
+        delete properties[field];
       }
     }
 
     // Remove excluded and optional fields from required array
     if (filteredSchema.required && Array.isArray(filteredSchema.required)) {
-      filteredSchema.required = filteredSchema.required.filter(
+      filteredSchema.required = (filteredSchema.required as string[]).filter(
         (field: string) =>
           !EXCLUDE_FIELDS.includes(field) && !OPTIONAL_FIELDS.includes(field)
       );
+    }
+
+    if (isFeatureEnabled(FeatureName.JSON_SCHEMA_FOR_FUNC_DECL)) {
+      return {
+        name: this.name,
+        description: this.description,
+        parametersJsonSchema: filteredSchema,
+      };
     }
 
     return {

@@ -10,6 +10,7 @@ import {OpenAPIV3} from 'openapi-types';
 import {ReadonlyContext} from '../../agents/readonly_context.js';
 import {AuthCredential} from '../../auth/auth_credential.js';
 import {AuthScheme} from '../../auth/auth_schemes.js';
+import {FeatureName, isFeatureEnabled} from '../../features/feature_registry.js';
 import {BaseTool, RunAsyncToolRequest} from '../base_tool.js';
 import {ToolContext} from '../tool_context.js';
 
@@ -57,7 +58,8 @@ export class RestApiTool extends BaseTool {
   authScheme?: AuthScheme;
   authCredential?: AuthCredential;
 
-  private operationParser: OperationParser;
+  /** @internal */
+  operationParser: OperationParser;
   private defaultHeaders: Record<string, string> = {};
   private sslVerify?: boolean;
   private headerProvider?: (context: ReadonlyContext) => Record<string, string>;
@@ -118,9 +120,20 @@ export class RestApiTool extends BaseTool {
 
   /**
    * Returns the function declaration in the Gemini Schema format.
+   * If JSON_SCHEMA_FOR_FUNC_DECL feature is enabled, uses parametersJsonSchema
+   * instead of converting to Gemini Schema format.
    */
   override _getDeclaration(): FunctionDeclaration {
     const schemaDict = this.operationParser.getJsonSchema();
+
+    if (isFeatureEnabled(FeatureName.JSON_SCHEMA_FOR_FUNC_DECL)) {
+      return {
+        name: this.name,
+        description: this.description,
+        parametersJsonSchema: schemaDict,
+      };
+    }
+
     return {
       name: this.name,
       description: this.description,
