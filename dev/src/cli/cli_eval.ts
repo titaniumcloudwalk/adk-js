@@ -24,6 +24,7 @@ import {
   type ConversationScenario,
   type Invocation,
   type Criterion,
+  type CustomMetricConfig,
   createEvalSet,
   createEvalCase,
   createEvalCaseWithScenario,
@@ -240,7 +241,119 @@ async function loadEvalSet(
 }
 
 /**
+ * Config file format for evaluation.
+ * Supports both simple metric configs and custom metrics with code paths.
+ */
+interface EvalConfigFile {
+  /** Simple criteria format: { "metric_name": threshold } */
+  criteria?: Record<string, number | Criterion>;
+
+  /** Custom metrics format: { "metric_name": { codeConfig: { name: "path.to.function" } } } */
+  customMetrics?: Record<string, CustomMetricConfig>;
+
+  /** Alternative: full metrics array format */
+  metrics?: Array<{
+    metricName: string;
+    threshold?: number;
+    criterion?: unknown;
+    customFunctionPath?: string;
+  }>;
+
+  numRepeats?: number;
+  maxParallelEvaluations?: number;
+  continueOnError?: boolean;
+  timeoutMs?: number;
+}
+
+/**
+ * Gets eval metrics from config, handling both criteria and customMetrics formats.
+ *
+ * @param configData - The parsed config file data
+ * @returns Array of EvalMetric objects
+ */
+function getEvalMetricsFromConfig(configData: EvalConfigFile): EvalMetric[] {
+  const metrics: EvalMetric[] = [];
+
+  // Handle the full metrics array format (existing behavior)
+  if (configData.metrics) {
+    for (const m of configData.metrics) {
+      metrics.push(
+        createEvalMetric(
+          m.metricName,
+          m.threshold ?? 0.5,
+          m.criterion as Criterion | undefined,
+          m.customFunctionPath
+        )
+      );
+    }
+    return metrics;
+  }
+
+  // Handle criteria + customMetrics format (Python pattern)
+  if (configData.criteria) {
+    for (const [metricName, criterion] of Object.entries(configData.criteria)) {
+      // Check if this metric has a custom function path
+      let customFunctionPath: string | undefined;
+      if (configData.customMetrics && configData.customMetrics[metricName]) {
+        const config = configData.customMetrics[metricName];
+        // Validate that codeConfig.args is not set (not supported)
+        if (config.codeConfig.args) {
+          throw new Error(
+            `args field in codeConfig for custom metric '${metricName}' is not supported.`
+          );
+        }
+        customFunctionPath = config.codeConfig.name;
+      }
+
+      // Handle threshold-only criterion
+      if (typeof criterion === 'number') {
+        metrics.push(createEvalMetric(metricName, criterion, undefined, customFunctionPath));
+      } else {
+        // Handle full criterion object
+        metrics.push(
+          createEvalMetric(
+            metricName,
+            (criterion as {threshold?: number}).threshold ?? 0.5,
+            criterion as Criterion,
+            customFunctionPath
+          )
+        );
+      }
+    }
+  }
+
+  return metrics;
+}
+
+/**
  * Loads eval config from a file or creates default config.
+ *
+ * Supports two config formats:
+ *
+ * 1. Simple criteria format (Python pattern):
+ * ```json
+ * {
+ *   "criteria": {
+ *     "tool_trajectory_avg_score": 0.8,
+ *     "my_custom_metric": 0.5
+ *   },
+ *   "customMetrics": {
+ *     "my_custom_metric": {
+ *       "codeConfig": { "name": "my_module.my_function" }
+ *     }
+ *   }
+ * }
+ * ```
+ *
+ * 2. Full metrics array format:
+ * ```json
+ * {
+ *   "metrics": [
+ *     { "metricName": "tool_trajectory_avg_score", "threshold": 0.8 },
+ *     { "metricName": "my_custom_metric", "threshold": 0.5, "customFunctionPath": "my_module.my_function" }
+ *   ]
+ * }
+ * ```
  *
  * @param configPath - Optional path to config file
  * @returns The eval config
@@ -251,22 +364,16 @@ async function loadEvalConfig(configPath?: string): Promise<EvalConfig> {
       ? configPath
       : path.join(process.cwd(), configPath);
     const content = await fs.readFile(absolutePath, 'utf-8');
-    const configData = JSON.parse(content) as {
-      metrics?: Array<{
-        metricName: string;
-        threshold?: number;
-        criterion?: unknown;
-      }>;
-      numRepeats?: number;
-      maxParallelEvaluations?: number;
-      continueOnError?: boolean;
-      timeoutMs?: number;
-    };
+    const configData = JSON.parse(content) as EvalConfigFile;
 
-    // Convert to EvalConfig
-    const metrics: EvalMetric[] = (configData.metrics ?? []).map((m) =>
-      createEvalMetric(m.metricName, m.threshold ?? 0.5, m.criterion as Criterion | undefined)
-    );
+    // Convert to EvalConfig using the format-aware helper
+    const metrics = getEvalMetricsFromConfig(configData);
+
+    if (metrics.length === 0) {
+      throw new Error(
+        'No metrics found in config file. Provide either "criteria" or "metrics" field.'
+      );
+    }
 
     return createEvalConfig(metrics, {
       numRepeats: configData.numRepeats,

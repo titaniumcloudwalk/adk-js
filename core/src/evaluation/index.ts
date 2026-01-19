@@ -53,6 +53,7 @@ export {
   createRubricsBasedCriterion,
   createToolTrajectoryCriterion,
   createHallucinationsCriterion,
+  createDefaultMetricInfo,
 } from './eval_metrics.js';
 export type {
   EvalMetric,
@@ -64,6 +65,11 @@ export type {
   LlmBackedUserSimulatorCriterion,
   Criterion,
   JudgeModelOptions,
+  Interval,
+  MetricValueInfo,
+  MetricInfo,
+  CodeConfig,
+  CustomMetricConfig,
 } from './eval_metrics.js';
 
 // Rubrics
@@ -138,8 +144,14 @@ export {RubricBasedFinalResponseQualityV1Evaluator} from './rubric_based_final_r
 export {RubricBasedToolUseQualityV1Evaluator} from './rubric_based_tool_use_quality_v1.js';
 export {HallucinationsV1Evaluator} from './hallucinations_v1.js';
 export {SafetyEvaluatorV1, SAFETY_CATEGORIES} from './safety_evaluator.js';
-export {CustomMetricEvaluator, createCustomEvaluator} from './custom_metric_evaluator.js';
-export type {CustomEvalFunction} from './custom_metric_evaluator.js';
+export {
+  CustomMetricEvaluator,
+  PathBasedCustomMetricEvaluator,
+  createCustomEvaluator,
+  createPathBasedCustomEvaluator,
+  getMetricFunction,
+} from './custom_metric_evaluator.js';
+export type {CustomEvalFunction, FullCustomEvalFunction} from './custom_metric_evaluator.js';
 
 // Agent evaluator
 export {AgentEvaluator, createAgentEvaluator} from './agent_evaluator.js';

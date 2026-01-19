@@ -575,6 +575,7 @@ export {
   createRubricsBasedCriterion,
   createToolTrajectoryCriterion,
   createHallucinationsCriterion,
+  createDefaultMetricInfo,
   // Rubrics
   createRubric,
   createRubricScore,
@@ -611,7 +612,10 @@ export {
   SafetyEvaluatorV1,
   SAFETY_CATEGORIES,
   CustomMetricEvaluator,
+  PathBasedCustomMetricEvaluator,
   createCustomEvaluator,
+  createPathBasedCustomEvaluator,
+  getMetricFunction,
   // Registry
   MetricEvaluatorRegistry,
   PrebuiltMetrics,
@@ -657,6 +661,11 @@ export type {
   LlmBackedUserSimulatorCriterion,
   Criterion,
   JudgeModelOptions,
+  Interval,
+  MetricValueInfo,
+  MetricInfo,
+  CodeConfig as EvalCodeConfig,
+  CustomMetricConfig,
   // Rubrics
   Rubric,
   RubricScore,
@@ -681,4 +690,5 @@ export type {
   UserSimulatorResult,
   // Custom evaluator
   CustomEvalFunction,
+  FullCustomEvalFunction,
 } from './evaluation/index.js';

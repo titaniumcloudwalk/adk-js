@@ -19,7 +19,11 @@ import {RubricBasedFinalResponseQualityV1Evaluator} from './rubric_based_final_r
 import {RubricBasedToolUseQualityV1Evaluator} from './rubric_based_tool_use_quality_v1.js';
 import {HallucinationsV1Evaluator} from './hallucinations_v1.js';
 import {SafetyEvaluatorV1} from './safety_evaluator.js';
-import {CustomMetricEvaluator, type CustomEvalFunction} from './custom_metric_evaluator.js';
+import {
+  CustomMetricEvaluator,
+  PathBasedCustomMetricEvaluator,
+  type CustomEvalFunction,
+} from './custom_metric_evaluator.js';
 import {PREBUILT_METRIC_NAMES} from './constants.js';
 
 /**
@@ -126,23 +130,21 @@ export class MetricEvaluatorRegistry {
       return factory(metric);
     }
 
-    // Check for custom function
+    // Check for registered custom function
     const customFunction = this.customFunctions.get(metric.metricName);
     if (customFunction) {
       return new CustomMetricEvaluator(metric.metricName, customFunction, metric.threshold);
     }
 
-    // Check if custom function path is provided
+    // Check if custom function path is provided - use PathBasedCustomMetricEvaluator
     if (metric.customFunctionPath) {
-      throw new Error(
-        `Custom function path '${metric.customFunctionPath}' specified but not loaded. ` +
-        `Register the function using MetricEvaluatorRegistry.registerCustomFunction().`
-      );
+      return new PathBasedCustomMetricEvaluator(metric, metric.customFunctionPath);
     }
 
     throw new Error(
       `No evaluator found for metric '${metric.metricName}'. ` +
-      `Available prebuilt metrics: ${Object.values(PREBUILT_METRIC_NAMES).join(', ')}`
+      `Available prebuilt metrics: ${Object.values(PREBUILT_METRIC_NAMES).join(', ')}. ` +
+      `For custom metrics, provide a customFunctionPath in the metric configuration.`
     );
   }
 

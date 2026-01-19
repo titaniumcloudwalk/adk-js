@@ -318,5 +318,125 @@ describe('cli_eval', () => {
 
       expect(result).toBe(0);
     });
+
+    it('loads config with criteria format (Python pattern)', async () => {
+      const agentPath = path.join(tempDir, 'agent.js');
+      await fs.writeFile(agentPath, `
+        export const rootAgent = { name: 'agent' };
+      `);
+
+      // Use the Python-style criteria format
+      const configPath = path.join(tempDir, 'eval_config.json');
+      await fs.writeFile(configPath, JSON.stringify({
+        criteria: {
+          tool_trajectory_avg_score: 0.8,
+          response_match_score: 0.7,
+        },
+      }));
+
+      const result = await runEvaluation({
+        agentPath,
+        evalSets: [],
+        configFile: configPath,
+        evalStorageUri: tempDir,
+      });
+
+      expect(result).toBe(0);
+    });
+
+    it('loads config with custom metrics', async () => {
+      const agentPath = path.join(tempDir, 'agent.js');
+      await fs.writeFile(agentPath, `
+        export const rootAgent = { name: 'agent' };
+      `);
+
+      // Config with custom metrics
+      const configPath = path.join(tempDir, 'eval_config.json');
+      await fs.writeFile(configPath, JSON.stringify({
+        criteria: {
+          tool_trajectory_avg_score: 0.8,
+          my_custom_metric: 0.5,
+        },
+        customMetrics: {
+          my_custom_metric: {
+            codeConfig: {
+              name: 'my_module.my_function',
+            },
+          },
+        },
+      }));
+
+      // Just verify it doesn't crash when loading the config
+      // (the actual function loading will fail since the module doesn't exist)
+      const result = await runEvaluation({
+        agentPath,
+        evalSets: [],
+        configFile: configPath,
+        evalStorageUri: tempDir,
+      });
+
+      expect(result).toBe(0);
+    });
+
+    it('loads config with customFunctionPath in metrics array', async () => {
+      const agentPath = path.join(tempDir, 'agent.js');
+      await fs.writeFile(agentPath, `
+        export const rootAgent = { name: 'agent' };
+      `);
+
+      // Config using the metrics array format with customFunctionPath
+      const configPath = path.join(tempDir, 'eval_config.json');
+      await fs.writeFile(configPath, JSON.stringify({
+        metrics: [
+          {
+            metricName: 'tool_trajectory_avg_score',
+            threshold: 0.8,
+          },
+          {
+            metricName: 'my_custom_metric',
+            threshold: 0.5,
+            customFunctionPath: 'my_module.my_function',
+          },
+        ],
+      }));
+
+      const result = await runEvaluation({
+        agentPath,
+        evalSets: [],
+        configFile: configPath,
+        evalStorageUri: tempDir,
+      });
+
+      expect(result).toBe(0);
+    });
+
+    it('returns error exit code when no metrics found in config file', async () => {
+      const agentPath = path.join(tempDir, 'agent.js');
+      await fs.writeFile(agentPath, `
+        export const rootAgent = { name: 'agent' };
+      `);
+
+      // Create an eval set first so we don't fail on that
+      await createEvalSetCommand({
+        agentPath,
+        evalSetId: 'test_empty_config',
+        evalStorageUri: tempDir,
+      });
+
+      // Empty config - no criteria and no metrics
+      const configPath = path.join(tempDir, 'eval_config.json');
+      await fs.writeFile(configPath, JSON.stringify({}));
+
+      // Should return exit code 1 (failure) when config has no metrics
+      const result = await runEvaluation({
+        agentPath,
+        evalSets: ['test_empty_config'],
+        configFile: configPath,
+        evalStorageUri: tempDir,
+      });
+
+      // runEvaluation returns exit codes: 0 for success, 1 for failure
+      expect(result).toBe(1);
+    });
   });
 });

@@ -247,3 +247,81 @@ export function createHallucinationsCriterion(
     sentenceSegmentation,
   };
 }
+
+/**
+ * Interval definition for metric values.
+ */
+export interface Interval {
+  minValue?: number;
+  maxValue?: number;
+}
+
+/**
+ * Information about metric value ranges.
+ */
+export interface MetricValueInfo {
+  interval?: Interval;
+}
+
+/**
+ * Metric information including name, description, and value ranges.
+ */
+export interface MetricInfo {
+  metricName: string;
+  description?: string;
+  metricValueInfo?: MetricValueInfo;
+}
+
+/**
+ * Code configuration for custom metrics.
+ */
+export interface CodeConfig {
+  /** Path to the custom metric function (e.g., "my_module.my_function") */
+  name: string;
+
+  /** Optional arguments (not supported for custom metrics). */
+  args?: unknown;
+}
+
+/**
+ * Configuration for a custom metric.
+ *
+ * This follows the Python ADK pattern for specifying custom metrics
+ * in evaluation config files.
+ */
+export interface CustomMetricConfig {
+  /**
+   * Code config for the custom metric, used to locate the custom metric function.
+   */
+  codeConfig: CodeConfig;
+
+  /**
+   * Optional metric info for the custom metric.
+   */
+  metricInfo?: MetricInfo;
+
+  /**
+   * Description for the custom metric (used if metricInfo not provided).
+   */
+  description?: string;
+}
+
+/**
+ * Creates a default MetricInfo for a metric.
+ *
+ * @param metricName - Name of the metric
+ * @param description - Optional description
+ * @returns A MetricInfo with default interval [0, 1]
+ */
+export function createDefaultMetricInfo(
+  metricName: string,
+  description?: string
+): MetricInfo {
+  return {
+    metricName,
+    description,
+    metricValueInfo: {
+      interval: {minValue: 0.0, maxValue: 1.0},
+    },
+  };
+}
