@@ -12,6 +12,7 @@ import {
   Session,
 } from '@google/genai';
 
+import {filterAudioParts} from '../utils/content_utils.js';
 import {logger} from '../utils/logger.js';
 
 import {BaseLlmConnection} from './base_llm_connection.js';
@@ -133,23 +134,31 @@ export class GeminiLlmConnection implements BaseLlmConnection {
    * The model will respond if the last content is from user, otherwise it will
    * wait for new user input before responding.
    *
+   * Filter out audio parts from history because:
+   * 1. Audio has already been transcribed.
+   * 2. Sending audio via connection.send or connection.sendLiveContent is
+   *    not supported by LIVE API (session will be corrupted).
+   *
+   * This method is called when:
+   * 1. Agent transfer to a new agent
+   * 2. Establishing a new live connection with previous ADK session history
+   *
    * @param history The conversation history to send to the model.
    */
   async sendHistory(history: Content[]): Promise<void> {
     this.ensureSession();
 
-    // We ignore any audio from user during the agent transfer phase.
-    const contents = history.filter(
-      (content) => content.parts && content.parts[0]?.text
-    );
+    // Filter out audio parts, keeping other content (text, images, etc.)
+    const contents = history
+      .map((content) => filterAudioParts(content))
+      .filter((content): content is Content => content !== null);
 
     if (contents.length > 0) {
+      logger.debug('Sending history to live connection:', contents);
       this.geminiSession!.sendClientContent({
         turns: contents,
         turnComplete: contents[contents.length - 1].role === 'user',
       });
-    } else {
-      logger.info('no content is sent');
     }
   }
 
