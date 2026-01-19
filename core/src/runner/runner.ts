@@ -33,6 +33,11 @@ interface RunnerInput {
   sessionService: BaseSessionService;
   memoryService?: BaseMemoryService;
   credentialService?: BaseCredentialService;
+  /**
+   * Whether to automatically create a session when not found. Defaults to
+   * false. If false, a missing session raises an error with a helpful message.
+   */
+  autoCreateSession?: boolean;
 }
 
 export class Runner {
@@ -43,6 +48,11 @@ export class Runner {
   readonly sessionService: BaseSessionService;
   readonly memoryService?: BaseMemoryService;
   readonly credentialService?: BaseCredentialService;
+  /**
+   * Whether to automatically create a session when not found. Defaults to
+   * false. If false, a missing session raises an error with a helpful message.
+   */
+  readonly autoCreateSession: boolean;
 
   constructor(input: RunnerInput) {
     this.appName = input.appName;
@@ -52,6 +62,55 @@ export class Runner {
     this.sessionService = input.sessionService;
     this.memoryService = input.memoryService;
     this.credentialService = input.credentialService;
+    this.autoCreateSession = input.autoCreateSession ?? false;
+  }
+
+  /**
+   * Gets the session or creates it if auto-creation is enabled.
+   *
+   * This helper first attempts to retrieve the session. If not found and
+   * autoCreateSession is true, it creates a new session with the provided
+   * identifiers. Otherwise, it throws an Error with a helpful message.
+   *
+   * @param userId The user ID of the session.
+   * @param sessionId The session ID of the session.
+   * @returns The existing or newly created Session.
+   * @throws Error if the session is not found and autoCreateSession is false.
+   */
+  private async getOrCreateSession({
+    userId,
+    sessionId,
+  }: {
+    userId: string;
+    sessionId: string;
+  }): Promise<Session> {
+    let session = await this.sessionService.getSession({
+      appName: this.appName,
+      userId,
+      sessionId,
+    });
+
+    if (!session) {
+      if (this.autoCreateSession) {
+        session = await this.sessionService.createSession({
+          appName: this.appName,
+          userId,
+          sessionId,
+        });
+      } else {
+        if (!this.appName) {
+          throw new Error(
+            `Session lookup failed: appName must be provided in runner constructor`
+          );
+        }
+        throw new Error(
+          `Session not found: ${sessionId}. To automatically create a session ` +
+            `when missing, set autoCreateSession=true when constructing the runner.`
+        );
+      }
+    }
+
+    return session;
   }
 
   /**
@@ -83,17 +142,7 @@ export class Runner {
     // =========================================================================
     const span = trace.getTracer('gcp.vertex.agent').startSpan('invocation');
     try {
-      const session =
-          await this.sessionService.getSession({appName: this.appName, userId, sessionId});
-
-      if (!session) {
-        if (!this.appName) {
-          throw new Error(
-            `Session lookup failed: appName must be provided in runner constructor`
-          );
-        }
-        throw new Error(`Session not found: ${sessionId}`);
-      }
+      const session = await this.getOrCreateSession({userId, sessionId});
 
       if (runConfig.supportCfc && this.agent instanceof LlmAgent) {
         const modelName = this.agent.canonicalModel.model;
@@ -386,20 +435,7 @@ export class Runner {
 
     const span = trace.getTracer('gcp.vertex.agent').startSpan('live_invocation');
     try {
-      const session = await this.sessionService.getSession({
-        appName: this.appName,
-        userId,
-        sessionId,
-      });
-
-      if (!session) {
-        if (!this.appName) {
-          throw new Error(
-            `Session lookup failed: appName must be provided in runner constructor`
-          );
-        }
-        throw new Error(`Session not found: ${sessionId}`);
-      }
+      const session = await this.getOrCreateSession({userId, sessionId});
 
       const invocationContext = this.newInvocationContextForLive(
         session,
@@ -567,15 +603,7 @@ export class Runner {
     sessionId: string;
     rewindBeforeInvocationId: string;
   }): Promise<void> {
-    const session = await this.sessionService.getSession({
-      appName: this.appName,
-      userId,
-      sessionId,
-    });
-
-    if (!session) {
-      throw new Error(`Session not found: ${sessionId}`);
-    }
+    const session = await this.getOrCreateSession({userId, sessionId});
 
     // Find the event index for the rewind point
     let rewindEventIndex = -1;

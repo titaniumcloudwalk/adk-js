@@ -514,4 +514,199 @@ describe('Runner error handling', () => {
     expect(error).not.toBeNull();
     expect(error?.message).toContain(`Session not found: ${nonExistentSessionId}`);
   });
+
+  it('should include helpful message about autoCreateSession when session not found', async () => {
+    const agent = new MockLlmAgent('test_agent');
+
+    const runner = new Runner({
+      appName: TEST_APP_ID,
+      agent: agent,
+      sessionService,
+      artifactService,
+    });
+
+    const nonExistentSessionId = 'non_existent_session_id';
+
+    const error = await runTestExpectingError(runner, nonExistentSessionId, TEST_USER_ID);
+
+    expect(error).not.toBeNull();
+    expect(error?.message).toContain('autoCreateSession=true');
+  });
+});
+
+describe('Runner.autoCreateSession', () => {
+  let sessionService: InMemorySessionService;
+  let artifactService: InMemoryArtifactService;
+
+  beforeEach(() => {
+    sessionService = new InMemorySessionService();
+    artifactService = new InMemoryArtifactService();
+  });
+
+  it('should automatically create session when autoCreateSession is true', async () => {
+    const agent = new MockLlmAgent('test_agent');
+
+    const runner = new Runner({
+      appName: TEST_APP_ID,
+      agent: agent,
+      sessionService,
+      artifactService,
+      autoCreateSession: true,
+    });
+
+    const newSessionId = 'new_auto_created_session_id';
+
+    // Verify session does not exist yet
+    let session = await sessionService.getSession({
+      appName: TEST_APP_ID,
+      userId: TEST_USER_ID,
+      sessionId: newSessionId,
+    });
+    expect(session).toBeFalsy();
+
+    // Run the agent - session should be auto-created
+    const events: Event[] = [];
+    for await (const event of runner.runAsync({
+      userId: TEST_USER_ID,
+      sessionId: newSessionId,
+      newMessage: {role: 'user', parts: [{text: 'Hello'}]},
+    })) {
+      events.push(event);
+    }
+
+    // Verify agent responded
+    expect(events.length).toBeGreaterThan(0);
+    expect(events[0].author).toBe('test_agent');
+
+    // Verify session now exists
+    session = await sessionService.getSession({
+      appName: TEST_APP_ID,
+      userId: TEST_USER_ID,
+      sessionId: newSessionId,
+    });
+    expect(session).not.toBeNull();
+    expect(session?.id).toBe(newSessionId);
+    expect(session?.userId).toBe(TEST_USER_ID);
+    expect(session?.appName).toBe(TEST_APP_ID);
+  });
+
+  it('should throw error when autoCreateSession is false (default)', async () => {
+    const agent = new MockLlmAgent('test_agent');
+
+    const runner = new Runner({
+      appName: TEST_APP_ID,
+      agent: agent,
+      sessionService,
+      artifactService,
+      // autoCreateSession defaults to false
+    });
+
+    const nonExistentSessionId = 'non_existent_session_id';
+
+    let error: Error | null = null;
+    try {
+      for await (const _ of runner.runAsync({
+        userId: TEST_USER_ID,
+        sessionId: nonExistentSessionId,
+        newMessage: {role: 'user', parts: [{text: 'Hello'}]},
+      })) {
+        // Consume the generator
+      }
+    } catch (e) {
+      error = e as Error;
+    }
+
+    expect(error).not.toBeNull();
+    expect(error?.message).toContain(`Session not found: ${nonExistentSessionId}`);
+  });
+
+  it('should use existing session even when autoCreateSession is true', async () => {
+    const agent = new MockLlmAgent('test_agent');
+
+    const runner = new Runner({
+      appName: TEST_APP_ID,
+      agent: agent,
+      sessionService,
+      artifactService,
+      autoCreateSession: true,
+    });
+
+    // Create session first
+    const existingSession = await sessionService.createSession({
+      appName: TEST_APP_ID,
+      userId: TEST_USER_ID,
+      sessionId: TEST_SESSION_ID,
+      state: {existingKey: 'existingValue'},
+    });
+
+    // Run the agent
+    const events: Event[] = [];
+    for await (const event of runner.runAsync({
+      userId: TEST_USER_ID,
+      sessionId: TEST_SESSION_ID,
+      newMessage: {role: 'user', parts: [{text: 'Hello'}]},
+    })) {
+      events.push(event);
+    }
+
+    // Verify agent responded
+    expect(events.length).toBeGreaterThan(0);
+
+    // Verify session still has original state (wasn't recreated)
+    const session = await sessionService.getSession({
+      appName: TEST_APP_ID,
+      userId: TEST_USER_ID,
+      sessionId: TEST_SESSION_ID,
+    });
+    expect(session?.state.existingKey).toBe('existingValue');
+  });
+
+  it('should auto-create session for rewindAsync when autoCreateSession is true', async () => {
+    const agent = new MockLlmAgent('test_agent');
+
+    const runner = new Runner({
+      appName: TEST_APP_ID,
+      agent: agent,
+      sessionService,
+      artifactService,
+      autoCreateSession: true,
+    });
+
+    const newSessionId = 'auto_rewind_session_id';
+
+    // Verify session does not exist yet
+    let session = await sessionService.getSession({
+      appName: TEST_APP_ID,
+      userId: TEST_USER_ID,
+      sessionId: newSessionId,
+    });
+    expect(session).toBeFalsy();
+
+    // rewindAsync should auto-create the session, but then throw because
+    // the invocation ID won't be found in the (empty) session
+    let error: Error | null = null;
+    try {
+      await runner.rewindAsync({
+        userId: TEST_USER_ID,
+        sessionId: newSessionId,
+        rewindBeforeInvocationId: 'non_existent_invocation',
+      });
+    } catch (e) {
+      error = e as Error;
+    }
+
+    // Should fail because invocation not found (not because session not found)
+    expect(error).not.toBeNull();
+    expect(error?.message).toContain('Invocation ID not found');
+    expect(error?.message).not.toContain('Session not found');
+
+    // Verify session was auto-created
+    session = await sessionService.getSession({
+      appName: TEST_APP_ID,
+      userId: TEST_USER_ID,
+      sessionId: newSessionId,
+    });
+    expect(session).not.toBeNull();
+    expect(session?.id).toBe(newSessionId);
+  });
 });
