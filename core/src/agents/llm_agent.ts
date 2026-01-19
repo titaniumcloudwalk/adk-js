@@ -1488,6 +1488,17 @@ const NL_PLANNING_RESPONSE_PROCESSOR = new NlPlanningResponseProcessor();
  * An agent that uses a large language model to generate responses.
  */
 export class LlmAgent extends BaseAgent {
+  /** Static flag to track if deprecation warning has been shown. */
+  private static globalInstructionDeprecationWarningShown = false;
+
+  /**
+   * Resets the globalInstruction deprecation warning flag.
+   * @internal This method is for testing purposes only.
+   */
+  static resetDeprecationWarnings(): void {
+    LlmAgent.globalInstructionDeprecationWarningShown = false;
+  }
+
   model?: string|BaseLlm;
   instruction: string|InstructionProvider;
   staticInstruction?: Content;
@@ -1664,6 +1675,18 @@ export class LlmAgent extends BaseAgent {
    */
   async canonicalGlobalInstruction(context: ReadonlyContext):
       Promise<{instruction: string, requireStateInjection: boolean}> {
+    // Issue deprecation warning if globalInstruction is being used
+    if (this.globalInstruction) {
+      if (!LlmAgent.globalInstructionDeprecationWarningShown) {
+        logger.warn(
+          'globalInstruction field is deprecated and will be removed in a ' +
+          'future version. Use GlobalInstructionPlugin instead for the same ' +
+          'functionality at the App level. See migration guide for details.'
+        );
+        LlmAgent.globalInstructionDeprecationWarningShown = true;
+      }
+    }
+
     if (typeof this.globalInstruction === 'string') {
       return {instruction: this.globalInstruction, requireStateInjection: true};
     }

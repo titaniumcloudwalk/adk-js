@@ -239,7 +239,7 @@ export {
   isAsyncGeneratorFunction,
   withAclosing,
 } from './utils/async_generator_utils.js';
-export {LogLevel, setLogLevel} from './utils/logger.js';
+export {logger, LogLevel, setLogLevel} from './utils/logger.js';
 export {isGemini2OrAbove} from './utils/model_name.js';
 export {zodObjectToSchema} from './utils/simple_zod_to_json.js';
 export {version} from './version.js';

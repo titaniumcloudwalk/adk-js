@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {BaseLlm, BaseLlmConnection, Event, InMemorySessionService, InvocationContext, LlmAgent, LlmRequest, LlmResponse, PluginManager, Session,} from '@google/adk';
+import {BaseLlm, BaseLlmConnection, Event, InMemorySessionService, InvocationContext, LlmAgent, LlmRequest, LlmResponse, logger, PluginManager, Session,} from '@google/adk';
 import {Content} from '@google/genai';
-import {describe, it, expect, beforeEach} from 'vitest';
+import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest';
 
 class MockLlmConnection implements BaseLlmConnection {
   sendHistory(history: Content[]): Promise<void> {
@@ -249,5 +249,74 @@ describe('LlmAgent staticInstruction feature', () => {
     // Verify dynamic instruction went to contents
     expect(llmRequest.contents.length).toBe(1);
     expect(llmRequest.contents[0].parts[0]).toEqual({text: 'Help the user with their current question.'});
+  });
+});
+
+describe('LlmAgent globalInstruction deprecation warning', () => {
+  let session: Session;
+  let sessionService: InMemorySessionService;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    sessionService = new InMemorySessionService();
+    session = await sessionService.createSession({
+      appName: 'test-app',
+      userId: 'test-user',
+    });
+    // Reset the deprecation warning flag before each test
+    LlmAgent.resetDeprecationWarnings();
+    warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  it('should log deprecation warning when globalInstruction is used', async () => {
+    const mockLlm = new MockLlm();
+    const agent = new LlmAgent({
+      name: 'test_agent',
+      model: mockLlm,
+      instruction: 'You are a helpful assistant.',
+      globalInstruction: 'Always be polite.',
+    });
+
+    const context = {
+      session,
+      invocationId: 'inv_123',
+    } as unknown as import('@google/adk').ReadonlyContext;
+
+    // Call canonicalGlobalInstruction which should trigger the warning
+    await agent.canonicalGlobalInstruction(context);
+
+    // Verify deprecation warning was logged
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('globalInstruction field is deprecated')
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Use GlobalInstructionPlugin instead')
+    );
+  });
+
+  it('should not log deprecation warning when globalInstruction is empty', async () => {
+    const mockLlm = new MockLlm();
+    const agent = new LlmAgent({
+      name: 'test_agent',
+      model: mockLlm,
+      instruction: 'You are a helpful assistant.',
+      // No globalInstruction set
+    });
+
+    const context = {
+      session,
+      invocationId: 'inv_123',
+    } as unknown as import('@google/adk').ReadonlyContext;
+
+    await agent.canonicalGlobalInstruction(context);
+
+    // Verify no deprecation warning was logged
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('globalInstruction field is deprecated')
+    );
   });
 });
