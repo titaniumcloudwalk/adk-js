@@ -5,6 +5,7 @@
  */
 
 export * from './common.js';
+export * from './tools/mcp/mcp_auth_utils.js';
 export * from './tools/mcp/mcp_session_manager.js';
 export * from './tools/mcp/mcp_tool.js';
 export * from './tools/mcp/mcp_toolset.js';
