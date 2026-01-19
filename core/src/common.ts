@@ -358,6 +358,25 @@ export type {
   TableReference as BigtableTableReference,
 } from './tools/bigtable/index.js';
 
+// Pub/Sub tools
+export {
+  PubSubToolset,
+  DEFAULT_PUBSUB_SCOPE,
+  getPubSubScopes,
+  getPubSubUserAgent,
+  validatePubSubToolConfig,
+} from './tools/pubsub/index.js';
+export type {
+  PubSubClient,
+  PubSubCredentialsConfig,
+  PubSubToolConfig,
+  PubSubToolsetOptions,
+  PulledMessage,
+  PublishMessageResponse,
+  PullMessagesResponse,
+  AcknowledgeMessagesResponse,
+} from './tools/pubsub/index.js';
+
 export * from './artifacts/base_artifact_service.js';
 export * from './memory/base_memory_service.js';
 export * from './memory/memory_entry.js';
