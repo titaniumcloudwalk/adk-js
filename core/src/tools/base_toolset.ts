@@ -73,6 +73,10 @@ export abstract class BaseToolset {
     }
 
     if (Array.isArray(this.toolFilter)) {
+      // Empty array means no filter - include all tools
+      if (this.toolFilter.length === 0) {
+        return true;
+      }
       return (this.toolFilter as string[]).includes(tool.name);
     }
 

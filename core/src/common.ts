@@ -377,6 +377,17 @@ export type {
   AcknowledgeMessagesResponse,
 } from './tools/pubsub/index.js';
 
+// API Hub tools
+export {
+  APIHubToolset,
+  APIHubClient,
+} from './tools/apihub_tool/index.js';
+export type {
+  APIHubToolsetOptions,
+  APIHubClientOptions,
+  BaseAPIHubClient,
+} from './tools/apihub_tool/index.js';
+
 export * from './artifacts/base_artifact_service.js';
 export * from './memory/base_memory_service.js';
 export * from './memory/memory_entry.js';
