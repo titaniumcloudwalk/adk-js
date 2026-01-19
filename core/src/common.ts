@@ -197,6 +197,16 @@ export {AgentTool} from './tools/agent_tool.js';
 export {BaseTool} from './tools/base_tool.js';
 export type {CallLiveToolRequest} from './tools/base_tool.js';
 export {BaseToolset} from './tools/base_toolset.js';
+export {
+  createToolboxToolset,
+  ToolboxToolset,
+} from './tools/toolbox_toolset.js';
+export type {
+  AuthTokenGetter,
+  BoundParamValue,
+  ToolboxCredentialConfig,
+  ToolboxToolsetOptions,
+} from './tools/toolbox_toolset.js';
 export {FunctionTool} from './tools/function_tool.js';
 export type {StreamingToolFunction} from './tools/function_tool.js';
 export {
