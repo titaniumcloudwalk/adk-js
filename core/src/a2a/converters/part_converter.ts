@@ -24,8 +24,8 @@ export const A2A_DATA_PART_METADATA_TYPE_EXECUTABLE_CODE = 'executable_code';
 export const A2A_DATA_PART_TEXT_MIME_TYPE = 'text/plain';
 
 // Tags for wrapping DataPart JSON in inline_data
-const A2A_DATA_PART_START_TAG = '<a2a_datapart_json>';
-const A2A_DATA_PART_END_TAG = '</a2a_datapart_json>';
+export const A2A_DATA_PART_START_TAG = '<a2a_datapart_json>';
+export const A2A_DATA_PART_END_TAG = '</a2a_datapart_json>';
 
 /**
  * A2A Part types from @a2a-js/sdk
