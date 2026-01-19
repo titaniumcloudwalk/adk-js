@@ -213,6 +213,10 @@ export {
   GoogleSearchTool,
 } from './tools/google_search_tool.js';
 export type {GoogleSearchToolConfig} from './tools/google_search_tool.js';
+export {
+  GOOGLE_MAPS_GROUNDING,
+  GoogleMapsGroundingTool,
+} from './tools/google_maps_grounding_tool.js';
 export {LongRunningFunctionTool} from './tools/long_running_tool.js';
 export {LoadMemoryTool, loadMemoryTool} from './tools/load_memory_tool.js';
 export type {LoadMemoryResponse} from './tools/load_memory_tool.js';
