@@ -34,6 +34,19 @@ export {
   InteractionsRequestProcessor,
   interactionsRequestProcessor,
 } from './flows/index.js';
+export {
+  FeatureName,
+  FeatureStage,
+  registerFeature,
+  overrideFeatureEnabled,
+  clearFeatureOverride,
+  clearAllFeatureOverrides,
+  clearWarnedFeatures,
+  isFeatureEnabled,
+  getAllFeatureNames,
+  applyFeatureOverrides,
+} from './features/index.js';
+export type {FeatureConfig} from './features/index.js';
 export {CallbackContext} from './agents/callback_context.js';
 export {
   functionsExportedForTestingOnly,
